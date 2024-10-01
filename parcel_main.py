@@ -625,7 +625,7 @@ user32 = ctypes.WinDLL('user32')
 def hide_console():
     hWnd = kernel32.GetConsoleWindow()
     if hWnd:
-        user32.ShowWindow(hWnd, 0)  # 0 = SW_HIDE
+        user32.ShowWindow(hWnd, 1)  # 0 = SW_HIDE
 
 def show_console():
     hWnd = kernel32.GetConsoleWindow()
@@ -1234,7 +1234,6 @@ class MainWindow(QMainWindow):
             self.count_y,
             self.colored_parcels
         )
-        print(self.gap_y, app_state.gap_y)
         # Initialize second window with saved state
         self.second_window.initialize_with_parcels(sorted_parcel_dict)
         self.second_window.initialize_params(app_state)

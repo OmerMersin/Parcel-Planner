@@ -1,108 +1,62 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map Example</title>
+
+    <!-- Include Leaflet CSS from local or CDN -->
+    <link rel="stylesheet" href="leaflet.css">
+    <!-- You can also use a CDN link if you prefer -->
+    <!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"> -->
+
+    <!-- Additional CSS files -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css">
     
-    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
-    
-            <link rel="stylesheet" href="file:///C:\Users\Getac\Documents\Omer Mersin\codes\parcel_planner\parceland\web_resources\css\leaflet.css" />
-        
-    
-        <script>
-            L_NO_TOUCH = false;
-            L_DISABLE_3D = false;
-        </script>
-    
-    <style>html, body {width: 100%;height: 100%;margin: 0;padding: 0;}</style>
-    <style>#map {position:absolute;top:0;bottom:0;right:0;left:0;}</style>
-    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            right: 0;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <!-- Load Leaflet JS first -->
+    <script src="leaflet.js"></script>
+    <!-- You can also use the CDN if not using local files -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script> -->
+
+    <!-- Additional JS files -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
-    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
-    
-            <meta name="viewport" content="width=device-width,
-                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-            <style>
-                #map_f76e44837d728c3264c70ce53c9ad845 {
-                    position: relative;
-                    width: 100.0%;
-                    height: 100.0%;
-                    left: 0.0%;
-                    top: 0.0%;
-                }
-                .leaflet-container { font-size: 1rem; }
-            </style>
-        
-</head>
-<body>
-    
-    
-            <script src="file:///C:\Users\Getac\Documents\Omer Mersin\codes\parcel_planner\parceland\web_resources\js\leaflet.js"></script>
-        
-    
-            <div class="folium-map" id="map_f76e44837d728c3264c70ce53c9ad845" ></div>
-        
+
+    <script>
+        // Now you can safely use L object because Leaflet.js has been loaded
+        var map = L.map('map').setView([37.325, -6.02884], 15);
+
+        // Add the OpenStreetMap tile layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Add a marker with a popup
+        var marker = L.marker([37.325, -6.02884]).addTo(map);
+        marker.bindPopup("Starting Point").openPopup();
+    </script>
 </body>
-<script>
-    
-    
-            var map_f76e44837d728c3264c70ce53c9ad845 = L.map(
-                "map_f76e44837d728c3264c70ce53c9ad845",
-                {
-                    center: [37.325, -6.02884],
-                    crs: L.CRS.EPSG3857,
-                    zoom: 15,
-                    zoomControl: true,
-                    preferCanvas: false,
-                }
-            );
-
-            
-
-        
-    
-            var tile_layer_c0934dcf3947c56327f4f9cd5484fb4e = L.tileLayer(
-                "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-                {"attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors", "detectRetina": false, "maxZoom": 18, "minZoom": 0, "noWrap": false, "opacity": 1, "subdomains": "abc", "tms": false}
-            );
-        
-    
-            tile_layer_c0934dcf3947c56327f4f9cd5484fb4e.addTo(map_f76e44837d728c3264c70ce53c9ad845);
-        
-    
-            var tile_layer_8ca3217e3d11447f543afcb6b5682d40 = L.tileLayer(
-                "http://localhost:8000/tiles/{z}/{x}/{y}.png",
-                {"attribution": "\u0026copy; \u003ca href=\"https://www.esri.com/en-us/home\"\u003eEsri\u003c/a\u003e", "detectRetina": false, "extraOptions": {"async": true}, "maxZoom": 20, "minZoom": 0, "noWrap": false, "opacity": 1, "subdomains": "abc", "tms": false}
-            );
-        
-    
-            tile_layer_8ca3217e3d11447f543afcb6b5682d40.addTo(map_f76e44837d728c3264c70ce53c9ad845);
-        
-    
-            var marker_7f8e83843d202171c2bc1bc66e100745 = L.marker(
-                [37.325, -6.02884],
-                {}
-            ).addTo(map_f76e44837d728c3264c70ce53c9ad845);
-        
-    
-        var popup_be416a2082eb918f4bf750a64f6ca183 = L.popup({"maxWidth": "100%"});
-
-        
-            
-                var html_479a228994a5f7a30ee62189ae0674ab = $(`<div id="html_479a228994a5f7a30ee62189ae0674ab" style="width: 100.0%; height: 100.0%;">Starting Point</div>`)[0];
-                popup_be416a2082eb918f4bf750a64f6ca183.setContent(html_479a228994a5f7a30ee62189ae0674ab);
-            
-        
-
-        marker_7f8e83843d202171c2bc1bc66e100745.bindPopup(popup_be416a2082eb918f4bf750a64f6ca183)
-        ;
-
-        
-    
-</script>
 </html>

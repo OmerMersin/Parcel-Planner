@@ -9,7 +9,9 @@ from PyQt6.QtWebEngineCore import QWebEngineSettings
 import socket
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 from functools import partial
-import jinja2
+import shutil
+import tempfile
+
 
 def is_online():
     try:
@@ -20,6 +22,16 @@ def is_online():
     return False
 
 def resource_path(relative_path):
+    """ Get absolute path to resource, works for PyInstaller executables """
+    try:
+        # PyInstaller creates a temp folder and stores resources in _MEIPASS
+        base_path = sys._MEIPASS
+    except AttributeError:
+        # If not running in a PyInstaller bundle, use the current directory
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+def per_resource_path(relative_path):
     """ Get absolute path to resource, works for development and for PyInstaller """
     try:
         # When running as an executable, use the folder where the .exe is located
@@ -27,6 +39,7 @@ def resource_path(relative_path):
     except AttributeError:
         # When running in a normal Python environment
         base_path = os.path.abspath(".")
+
     return os.path.join(base_path, relative_path)
 
 
@@ -34,11 +47,10 @@ class TileServerHandler(SimpleHTTPRequestHandler):
     def __init__(self, cache_dir, online, *args, **kwargs):
         self.cache_dir = cache_dir
         self.online = online
-        self.no_tile_image = resource_path("map_tiles/no_tile_found.png")
+        self.no_tile_image = resource_path("no_tile_found.png")
         super().__init__(*args, **kwargs)
 
     def do_GET(self):
-        # Expecting URL of the form /tiles/z/x/y.png
         if self.path.startswith('/tiles/'):
             path_parts = self.path.strip('/').split('/')
             if len(path_parts) == 4:
@@ -47,61 +59,77 @@ class TileServerHandler(SimpleHTTPRequestHandler):
                 tile_path = os.path.join(self.cache_dir, f'{z}_{x}_{y}.png')
 
                 if os.path.exists(tile_path):
-                    # Serve from cache
                     self.send_response(200)
                     self.send_header('Content-Type', 'image/png')
                     self.end_headers()
                     with open(tile_path, 'rb') as f:
                         self.wfile.write(f.read())
                 else:
-                    if self.online:
-                        # Download the tile, save to cache, and serve it
+                    if is_online():
+                        # Only try to download tiles if online
                         tile_url = f'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
                         try:
                             response = requests.get(tile_url, stream=True)
                             if response.status_code == 200:
-                                # Save to cache
+                                os.makedirs(os.path.dirname(tile_path), exist_ok=True)
                                 with open(tile_path, 'wb') as tile_file:
                                     for chunk in response.iter_content(1024):
                                         tile_file.write(chunk)
-                                # Serve the tile
                                 self.send_response(200)
                                 self.send_header('Content-Type', 'image/png')
                                 self.end_headers()
                                 with open(tile_path, 'rb') as f:
                                     self.wfile.write(f.read())
                             else:
-                                # Tile not available, serve "No Tile Found" image
                                 print(f"Tile not available online: {z}/{x}/{y}")
                                 self.serve_no_tile_found_image()
-                        except Exception as e:
+                        except requests.exceptions.RequestException as e:
                             print(f"Error downloading tile {z}/{x}/{y}: {e}")
                             self.serve_no_tile_found_image()
                     else:
-                        # Offline and tile not in cache, serve "No Tile Found" image
                         print(f"Offline, serving 'No Tile Found' image for {z}/{x}/{y}")
                         self.serve_no_tile_found_image()
             else:
                 self.send_error(404)
 
+
     def serve_no_tile_found_image(self):
-        """Serve the 'No Tile Found' image."""
-        if os.path.exists(self.no_tile_image):
-            self.send_response(200)
-            self.send_header('Content-Type', 'image/png')
-            self.end_headers()
-            with open(self.no_tile_image, 'rb') as f:
-                self.wfile.write(f.read())
-        else:
-            # If the "No Tile Found" image is missing, return 404
-            self.send_error(404)
+        """Serve the 'No Tile Found' image from a writable location."""
+        try:
+            # Copy the no_tile_found.png to a writable temporary directory
+            temp_dir = tempfile.gettempdir()
+            temp_image_path = os.path.join(temp_dir, 'no_tile_found.png')
+
+            # If the image doesn't already exist in the temp dir, copy it
+            if not os.path.exists(temp_image_path):
+                shutil.copy(self.no_tile_image, temp_image_path)
+
+            # Now serve the copied image from the temp directory
+            if os.path.exists(temp_image_path):
+                try:
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'image/png')
+                    self.end_headers()
+                    with open(temp_image_path, 'rb') as f:
+                        self.wfile.write(f.read())
+                except ConnectionAbortedError as e:
+                    print(f"Connection was aborted by the client: {e}")
+            else:
+                self.send_error(404, "No tile found image not available.")
+        except PermissionError as e:
+            print(f"Permission Error: {e}")
+            self.send_error(403, "Permission denied while trying to read no_tile_found.png.")
+        except Exception as e:
+            print(f"Error serving no_tile_found.png: {e}")
+            self.send_error(500, "Error serving no_tile_found.png.")
+
 
 class TileServerThread(QThread):
     def __init__(self, cache_dir, online, port=8000):
         super().__init__()
         self.cache_dir = cache_dir
         self.online = online
-        self.no_tile_image = resource_path("map_tiles/no_tile_found.png")
+        self.no_tile_image = resource_path("no_tile_found.png")
         self.port = port
 
     def run(self):
@@ -130,11 +158,11 @@ class MapWidget(QWidget):
         self.layout.addWidget(self.view)
 
         # Directory to store cached tiles
-        self.cache_dir = resource_path('map_tiles')
+        self.cache_dir = per_resource_path('map_tiles')
         if not os.path.exists(self.cache_dir):
             os.makedirs(self.cache_dir)
 
-        self.no_tile_image = resource_path("map_tiles/no_tile_found.png")
+        self.no_tile_image = resource_path("no_tile_found.png")
 
         # Check if online
         self.online = is_online()
@@ -164,6 +192,7 @@ class MapWidget(QWidget):
             self.online = is_now_online
             self.tile_server_thread.set_online_status(self.online)
             if self.online:
+                # Reload satellite tiles to fetch new tiles
                 self.reload_satellite_tiles()
 
 
@@ -211,9 +240,14 @@ class MapWidget(QWidget):
             <script src="file:///{leaflet_js}"></script>
         """))
 
+
         # Save map data to an HTML file
         map_path = resource_path('map.html')
+        # Get the system temp directory and save the map there
+        temp_dir = tempfile.gettempdir()
+        map_path = os.path.join(temp_dir, 'map.html')
         folium_map.save(map_path)
+
 
         # Enable local file access
         self.view.settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
@@ -243,11 +277,11 @@ class MapWidget(QWidget):
         if (typeof window.satelliteLayer !== 'undefined') {
             window.mapObject.removeLayer(window.satelliteLayer);
         }
-        window.satelliteLayer = L.tileLayer('http://localhost:{port}/tiles/{{z}}/{{x}}/{{y}}.png', {{
+        window.satelliteLayer = L.tileLayer('http://localhost:{port}/tiles/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.esri.com/en-us/home">Esri</a>',
             maxZoom: 20,
             async: true
-        }}).addTo(window.mapObject);
+        }).addTo(window.mapObject);
         """.replace("{port}", str(self.tile_server_port))
 
         # Run the JavaScript to update the map

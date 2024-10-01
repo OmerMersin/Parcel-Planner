@@ -752,7 +752,6 @@ class PlannerMainWindow(QMainWindow):
         self.height = app_state.height
         self.gap_x = app_state.gap_x
         self.gap_y = app_state.gap_y
-        print(app_state.gap_y)
         self.count_x = app_state.count_x
         self.count_y = app_state.count_y
         self.button_names = app_state.button_names
@@ -1038,8 +1037,6 @@ class PlannerMainWindow(QMainWindow):
 
     def clear_parcels(self):
         logger.debug("clearing parcels")
-        print("clearing parcels")
-
         # Batch JS code to remove parcels
         js_code = ""
 
@@ -1072,8 +1069,6 @@ class PlannerMainWindow(QMainWindow):
         # Only run JavaScript if there is something to remove
         if js_code.strip():
             self.map_view.view.page().runJavaScript(js_code)
-
-        print("cleared parcels")
 
 
 

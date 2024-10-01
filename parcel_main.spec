@@ -7,7 +7,8 @@ a = Analysis(
     binaries=[],
     datas=[
         ('map.html', 'map.html'),
-        ('custom_map.html','custom_map.html')
+        ('map_tiles/no_tile_found.png','no_tile_found.png'),
+        ('web_resources', 'web_resources'),
     ],
     hiddenimports=[],
     hookspath=[],
