@@ -1,16 +1,12 @@
 import sys
-from PyQt6.QtCore import QUrl
 from PyQt6.QtWidgets import QApplication, QMainWindow, QHBoxLayout, QWidget, QSplitter, QLabel, QLineEdit, QFormLayout, QPushButton, QGridLayout, QSizePolicy, QRadioButton, QMessageBox, QToolBar, QFileDialog
-from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtWebEngineCore import QWebEngineSettings
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QColor, QIcon, QAction, QPixmap
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QIcon, QAction
 import math
 from parcel_main import app_state
 from parcel_gen import ParcelGenerator
 import os
-import socket
-import subprocess
+import configparser
 import time
 from parcel_main import ColorButtonWidget
 import logging
@@ -54,7 +50,7 @@ def temp_resource_path(relative_path):
 # Define the paths to 'missions' and 'reports' directories
 missions_dir = resource_path('missions')
 reports_dir = resource_path('reports')
-map_dir = resource_path("maps")
+config_dir = resource_path("config")
 
 # Create the directories if they don't already exist
 if not os.path.exists(missions_dir):
@@ -63,8 +59,8 @@ if not os.path.exists(missions_dir):
 if not os.path.exists(reports_dir):
     os.makedirs(reports_dir)
 
-if not os.path.exists(map_dir):
-    os.makedirs(map_dir)
+if not os.path.exists(config_dir):
+    os.makedirs(config_dir)
 
         
 class PlannerMainWindow(QMainWindow):
@@ -182,7 +178,7 @@ class PlannerMainWindow(QMainWindow):
         form_layout.addRow(self.fit)
 
 
-        self.save_button = QPushButton("Save")
+        self.save_button = QPushButton("Process")
         self.save_button.clicked.connect(self.save)
         self.save_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         form_layout.addWidget(self.save_button)
@@ -300,7 +296,6 @@ class PlannerMainWindow(QMainWindow):
         form_layout.addRow(self.total_height)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        self.map_view = self.map_widget
         splitter.addWidget(self.map_widget)  # Add the map view to the splitter
 
         # Label for the stitched image (hidden by default)
@@ -310,6 +305,9 @@ class PlannerMainWindow(QMainWindow):
         splitter.setSizes([800, 200])
 
         self.color_to_button_map = {widget.color_hex: widget.button_name for widget in self.color_button_widgets}
+        
+        self.config_file = resource_path("config.ini")
+        self.load_coordinates_from_config()
 
         container = QWidget()
         main_layout = QHBoxLayout(container)
@@ -358,7 +356,7 @@ class PlannerMainWindow(QMainWindow):
             self.parcel_marker_js_references = []  # Clear the references after removal
 
         # Run the accumulated JavaScript code in a single call
-        self.map_view.view.page().runJavaScript(js_code)
+        self.map_widget.view.page().runJavaScript(js_code)
 
         # Update the spraying width from the input
         self.spraying_width = self.spraying_width_input.text()
@@ -853,7 +851,7 @@ class PlannerMainWindow(QMainWindow):
 
         self.generate_mission.setText(f"Save Mission")
         self.generate_mission.setStyleSheet(f"background-color: None; color: black;")
-
+        self.load_coordinates_from_config()
         self.clear_parcels()
 
         if app_state.file_opened:
@@ -1068,7 +1066,7 @@ class PlannerMainWindow(QMainWindow):
 
         # Only run JavaScript if there is something to remove
         if js_code.strip():
-            self.map_view.view.page().runJavaScript(js_code)
+            self.map_widget.view.page().runJavaScript(js_code)
 
 
 
@@ -1177,14 +1175,18 @@ class PlannerMainWindow(QMainWindow):
         self.paths_by_color = {}
         self.current_path = None
 
-        t_l_lat = float(self.top_left_lat_input.text())
-        t_l_lon = float(self.top_left_lon_input.text())
-        t_r_lat = float(self.top_right_lat_input.text())
-        t_r_lon = float(self.top_right_lon_input.text())
-        b_l_lat = float(self.bot_left_lat_input.text())
-        b_l_lon = float(self.bot_left_lon_input.text())
-        b_r_lat = float(self.bot_right_lat_input.text())
-        b_r_lon = float(self.bot_right_lon_input.text())
+        try:
+            t_l_lat = float(self.top_left_lat_input.text())
+            t_l_lon = float(self.top_left_lon_input.text())
+            t_r_lat = float(self.top_right_lat_input.text())
+            t_r_lon = float(self.top_right_lon_input.text())
+            b_l_lat = float(self.bot_left_lat_input.text())
+            b_l_lon = float(self.bot_left_lon_input.text())
+            b_r_lat = float(self.bot_right_lat_input.text())
+            b_r_lon = float(self.bot_right_lon_input.text())
+        except:
+            self.show_warning("Wrong input", "Please check inputs for coordinates")
+            return
 
         area_corners = [
             [t_l_lat, t_l_lon],  # Top-left
@@ -1299,7 +1301,7 @@ class PlannerMainWindow(QMainWindow):
             """
             self.parcel_js_references.append(f"parcel{i}")  # Store JavaScript reference
 
-        # self.map_view.view.page().runJavaScript(js_code)
+        # self.map_widget.view.page().runJavaScript(js_code)
 
         # Convert the input strings to float for latitude and longitude
         t_l_lat = float(self.top_left_lat_input.text())
@@ -1322,9 +1324,9 @@ class PlannerMainWindow(QMainWindow):
             map.setCenter({{ lat: parseFloat({center_lat}), lng: parseFloat({center_lon}) }});
             map.setZoom({zoom_level});
             """
-            # self.map_view.view.page().runJavaScript(js_code)
+            # self.map_widget.view.page().runJavaScript(js_code)
 
-        self.map_view.generate_parcels(self.parcel_coordinates, center_lat, center_lon, zoom_level)
+        self.map_widget.generate_parcels(self.parcel_coordinates, center_lat, center_lon, zoom_level)
 
     def window(self, window):
         logger.debug(f"window defined for the value of: {window}")
@@ -1799,7 +1801,7 @@ class PlannerMainWindow(QMainWindow):
             self.parcel_marker_js_references.append(marker_end_name)
 
         # Run the accumulated JavaScript code
-        self.map_view.view.page().runJavaScript(js_code)
+        self.map_widget.view.page().runJavaScript(js_code)
 
         # Update the references for the current path, start marker, and end marker
         self.current_path = 'parcelPath'
@@ -1978,26 +1980,83 @@ class PlannerMainWindow(QMainWindow):
         # Execute the message box and handle the user's choice
         msg_box.exec()
 
+        # Determine which button was clicked and return the corresponding value
         if msg_box.clickedButton() == save_and_quit_button:
-            # Save the file and quit
-            self.save_file()
-            self.close()
+            return "save_and_quit"
         elif msg_box.clickedButton() == quit_without_saving_button:
-            # Quit without saving
-            self.close()
-        elif msg_box.clickedButton() == cancel_button:
-            # Cancel the quit operation, do nothing
-            return
+            return "quit_without_saving"
+        else:
+            return "cancel"
 
     def closeEvent(self, event):
         """Override the closeEvent to show the confirmation dialog when clicking the window close button."""
         user_choice = self.confirm_quit()
 
-        # If the user chooses to cancel, ignore the close event
-        if user_choice is None or user_choice == QMessageBox.StandardButton.Cancel:
-            event.ignore()  # Prevent the window from closing
+        # Handle the user's choice
+        if user_choice == "save_and_quit":
+            self.map_widget.save_map_coordinates()  # Save the map coordinates
+            self.save_config()
+            event.accept()  # Close the window
+        elif user_choice == "quit_without_saving":
+            self.map_widget.save_map_coordinates()
+            self.save_config()
+            event.accept()  # Close the window without saving
         else:
-            event.accept()  # Proceed with closing the window
+            event.ignore()  # Cancel the close event
+
+    def load_coordinates_from_config(self):
+        config = configparser.ConfigParser()
+
+        # Check if the config file exists
+        if os.path.exists(self.config_file):
+            print(f"Config file found at: {self.config_file}")
+            config.read(self.config_file)
+            
+            # Debug: Print config sections
+            print(f"Config sections: {config.sections()}")
+            
+            if 'Location' in config:
+                # Attempt to get latitude, longitude, and zoom from the config file
+                try:
+                    self.top_left_lat_input.setText((config.get("Location", "a-lat")))
+                    self.top_left_lon_input.setText((config.get("Location", "a-lon")))
+                    self.top_right_lat_input.setText((config.get("Location", "b-lat")))
+                    self.top_right_lon_input.setText((config.get("Location", "b-lon")))
+                    self.bot_left_lat_input.setText((config.get("Location", "c-lat")))
+                    self.bot_left_lon_input.setText((config.get("Location", "c-lon")))
+                    self.bot_right_lat_input.setText((config.get("Location", "d-lat")))
+                    self.bot_right_lon_input.setText((config.get("Location", "d-lon")))
+                except Exception as e:
+                    print(f"Error reading config values: {e}")
+                    # Return default values if there's an error
+                    return (37.32500, -6.02884), 15
+            else:
+                print("No 'Location' section in the config file.")
+                return (37.32500, -6.02884), 15
+        else:
+            print("Config file does not exist.")
+            # Return default values if the file does not exist
+            return (37.32500, -6.02884), 15
+        
+
+    def save_config(self):
+        config = configparser.ConfigParser()
+        if os.path.exists(self.config_file):
+            config.read(self.config_file)
+        config['Location'] = {
+            'a-lat': str(float(self.top_left_lat_input.text())),
+            'a-lon': str(float(self.top_left_lon_input.text())),
+            'b-lat': str(float(self.top_right_lat_input.text())),
+            'b-lon': str(float(self.top_right_lon_input.text())),
+            'c-lat': str(float(self.bot_left_lat_input.text())),
+            'c-lon': str(float(self.bot_left_lon_input.text())),
+            'd-lat': str(float(self.bot_right_lat_input.text())),
+            'd-lon': str(float(self.bot_right_lon_input.text())),
+            'zoom': str(18)
+        }
+        with open(self.config_file, 'w') as configfile:
+            config.write(configfile)
+
 
 if __name__ == "__main__":
     logger.info("Starting planner")

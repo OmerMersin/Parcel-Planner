@@ -11,7 +11,7 @@ from http.server import SimpleHTTPRequestHandler, HTTPServer
 from functools import partial
 import shutil
 import tempfile
-
+import configparser
 
 def is_online():
     try:
@@ -179,7 +179,9 @@ class MapWidget(QWidget):
         self.timer.start()
 
         self.satellite_layer = None
-
+        # Config file handling
+        self.config_file = per_resource_path("config.ini")
+        self.map_coords, self.map_zoom = self.load_coordinates_from_config()
 
         # Create and load the map
         self.load_map()
@@ -195,20 +197,50 @@ class MapWidget(QWidget):
                 # Reload satellite tiles to fetch new tiles
                 self.reload_satellite_tiles()
 
+    def load_coordinates_from_config(self):
+        config = configparser.ConfigParser()
 
+        # Check if the config file exists
+        if os.path.exists(self.config_file):
+            print(f"Config file found at: {self.config_file}")
+            config.read(self.config_file)
+            
+            # Debug: Print config sections
+            print(f"Config sections: {config.sections()}")
+            
+            if 'Map' in config:
+                # Attempt to get latitude, longitude, and zoom from the config file
+                try:
+                    lat = float(config.get("Map", "latitude"))
+                    lon = float(config.get("Map", "longitude"))
+                    zoom = int(config.get("Map", "zoom"))
+                    print(f"Loaded from config: lat={lat}, lon={lon}, zoom={zoom}")
+                    return (lat, lon), zoom
+                except Exception as e:
+                    print(f"Error reading config values: {e}")
+                    # Return default values if there's an error
+                    return (37.32500, -6.02884), 15
+            else:
+                print("No 'Map' section in the config file.")
+                return (37.32500, -6.02884), 15
+        else:
+            print("Config file does not exist.")
+            # Return default values if the file does not exist
+            return (37.32500, -6.02884), 15
+
+            
     def closeEvent(self, event):
+        """Override the closeEvent to save map coordinates and close."""
         # Stop the tile server when closing the application
         self.tile_server_thread.stop()
         self.tile_server_thread.wait()
-        event.accept()
+        event.accept()  # Accept the event to proceed with closing the window
 
     def load_map(self):
-        start_coords = (37.32500, -6.02884)  # Coordinates as an example
-
         # Create a folium map with the OpenStreetMap tiles (low-res)
         folium_map = folium.Map(
-            location=start_coords,
-            zoom_start=15,
+            location=self.map_coords,
+            zoom_start=self.map_zoom,
             tiles="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
             attr='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
             control_scale=False,
@@ -228,7 +260,7 @@ class MapWidget(QWidget):
         self.satellite_layer.add_to(folium_map)
 
         # Add a marker to the map
-        folium.Marker(start_coords, popup='Starting Point').add_to(folium_map)
+        # folium.Marker(start_coords, popup='Starting Point').add_to(folium_map)
 
         leaflet_css = resource_path('web_resources/css/leaflet.css')
         leaflet_js = resource_path('web_resources/js/leaflet.js')
@@ -327,6 +359,40 @@ class MapWidget(QWidget):
         # Run the generated JavaScript in one batch
         self.view.page().runJavaScript(js_code)
 
+    def save_map_coordinates(self):
+        js_code = """
+        (function() {
+            var center = window.mapObject.getCenter();
+            var zoom = window.mapObject.getZoom();
+            return [center.lat, center.lng, zoom];
+        })();
+        """
+
+        def save_coords_in_config(coords):
+            # Check if we have a valid result
+            if isinstance(coords, list) and len(coords) == 3:
+                lat, lon, zoom = coords
+                print(f"Saving coordinates: lat={lat}, lon={lon}, zoom={zoom}")
+                self.save_coordinates_to_config(lat, lon, zoom)
+            else:
+                print("Failed to retrieve valid coordinates.")
+
+        self.view.page().runJavaScript(js_code, save_coords_in_config)
+
+
+    def save_coordinates_to_config(self, lat, lon, zoom):
+        config = configparser.ConfigParser()
+        if os.path.exists(self.config_file):
+            config.read(self.config_file)
+
+        config['Map'] = {
+            'latitude': str(lat),
+            'longitude': str(lon),
+            'zoom': str(zoom)
+        }
+        with open(self.config_file, 'w') as configfile:
+            config.write(configfile)
+
 
 class MainWindow(QWidget):
     def __init__(self):
@@ -339,6 +405,12 @@ class MainWindow(QWidget):
         self.map_widget = MapWidget()
 
         self.layout.addWidget(self.map_widget)
+
+    def closeEvent(self, event):
+        """Override the closeEvent to save map coordinates and close."""
+        self.map_widget.save_map_coordinates()  # Save coordinates before closing
+        print("Close event triggered!")
+        event.accept()  # Accept the event to proceed with closing the window
 
 
 if __name__ == "__main__":
