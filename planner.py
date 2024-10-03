@@ -313,7 +313,7 @@ class PlannerMainWindow(QMainWindow):
         main_layout = QHBoxLayout(container)
         main_layout.addWidget(splitter)
         self.setCentralWidget(container)
-        self.showMaximized()
+        # self.showMaximized()
 
     def change_acc(self):
         self.paths_by_color.clear()
@@ -1364,6 +1364,10 @@ class PlannerMainWindow(QMainWindow):
         app_state.acc_buffer = self.acc_buffer
 
         self.main_window.initialize_params(app_state)
+
+        planning_window_geometry = self.geometry()
+        self.main_window.setGeometry(planning_window_geometry)
+
         self.main_window.show()
         self.hide()
 

@@ -843,25 +843,22 @@ class MainWindow(QMainWindow):
         msg_box.setWindowTitle("Confirm Quit")
         msg_box.setText("Do you want to quit without saving?")
         msg_box.setIcon(QMessageBox.Icon.Warning)
-        
+
         # Add buttons for "Save and Quit," "Quit without Saving," and "Cancel"
         save_and_quit_button = msg_box.addButton("Save and Quit", QMessageBox.ButtonRole.AcceptRole)
         quit_without_saving_button = msg_box.addButton("Quit without Saving", QMessageBox.ButtonRole.DestructiveRole)
         cancel_button = msg_box.addButton(QMessageBox.StandardButton.Cancel)
-        
+
         # Execute the message box and handle the user's choice
         msg_box.exec()
 
+        # Determine which button was clicked and return the corresponding value
         if msg_box.clickedButton() == save_and_quit_button:
-            # Save the file and quit
-            self.save_file()
-            self.close()
+            return "save_and_quit"
         elif msg_box.clickedButton() == quit_without_saving_button:
-            # Quit without saving
-            self.close()
-        elif msg_box.clickedButton() == cancel_button:
-            # Cancel the quit operation, do nothing
-            return
+            return "quit_without_saving"
+        else:
+            return "cancel"
 
     def open_file(self):
         logger.debug("Open file action triggered")
@@ -1204,6 +1201,7 @@ class MainWindow(QMainWindow):
         self.file_opened = app_state.file_opened
         app_state.button_params = app_state.button_params
         app_state.acc_buffer = app_state.acc_buffer
+        self.parcel_field.update_field(self.width, self.height, self.gap_x, self.gap_y, self.count_x, self.count_y)
         self.restore_state()
         
     def planning(self):
@@ -1238,6 +1236,9 @@ class MainWindow(QMainWindow):
         self.second_window.initialize_with_parcels(sorted_parcel_dict)
         self.second_window.initialize_params(app_state)
 
+        main_window_geometry = self.geometry()
+        self.second_window.setGeometry(main_window_geometry)
+
         self.second_window.window(self)
 
         # Switch to the second window
@@ -1263,11 +1264,17 @@ class MainWindow(QMainWindow):
         """Override the closeEvent to show the confirmation dialog when clicking the window close button."""
         user_choice = self.confirm_quit()
 
-        # If the user chooses to cancel, ignore the close event
-        if user_choice is None or user_choice == QMessageBox.StandardButton.Cancel:
-            event.ignore()  # Prevent the window from closing
+        # Handle the user's choice
+        if user_choice == "save_and_quit":
+            self.map_widget.save_map_coordinates()  # Save the map coordinates
+            self.save_config()
+            event.accept()  # Close the window
+        elif user_choice == "quit_without_saving":
+            self.second_window.map_widget.save_map_coordinates()
+            self.second_window.save_config()
+            event.accept()  # Close the window without saving
         else:
-            event.accept()  # Proceed with closing the window
+            event.ignore()  # Cancel the close event
 
 if __name__ == "__main__":
     logger.info("Starting parcel_main")
