@@ -10,6 +10,11 @@ from logging.handlers import RotatingFileHandler
 import os
 import json
 
+
+log_file_path = os.path.join(os.path.dirname(__file__), "app.log")
+sys.stdout = open(log_file_path, "w")
+sys.stderr = open(log_file_path, "w")
+
 def resource_path(relative_path):
     """ Get absolute path to resource, works for development and for PyInstaller """
     try:
@@ -625,7 +630,7 @@ user32 = ctypes.WinDLL('user32')
 def hide_console():
     hWnd = kernel32.GetConsoleWindow()
     if hWnd:
-        user32.ShowWindow(hWnd, 1)  # 0 = SW_HIDE
+        user32.ShowWindow(hWnd, 0)  # 0 = SW_HIDE
 
 def show_console():
     hWnd = kernel32.GetConsoleWindow()

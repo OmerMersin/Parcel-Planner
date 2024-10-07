@@ -50,7 +50,6 @@ def temp_resource_path(relative_path):
 # Define the paths to 'missions' and 'reports' directories
 missions_dir = resource_path('missions')
 reports_dir = resource_path('reports')
-config_dir = resource_path("config")
 
 # Create the directories if they don't already exist
 if not os.path.exists(missions_dir):
@@ -58,9 +57,6 @@ if not os.path.exists(missions_dir):
 
 if not os.path.exists(reports_dir):
     os.makedirs(reports_dir)
-
-if not os.path.exists(config_dir):
-    os.makedirs(config_dir)
 
         
 class PlannerMainWindow(QMainWindow):
