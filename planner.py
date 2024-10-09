@@ -12,7 +12,7 @@ from parcel_main import ColorButtonWidget
 import logging
 import json
 from main import MapWidget
-
+from PyQt6.QtCore import QTranslator, QLocale
 # Carry only appstate between windows V
 # Fix to create mission with original paths for spray on and off V
 # RESTORE APP STATE DOESNT PROTECT THE PARAMS OF THE LAST BUTTON V
@@ -97,16 +97,16 @@ class PlannerMainWindow(QMainWindow):
         self.current_start_marker = None
         self.current_end_marker = None
 
-        self.clear_button = QPushButton("Clear Parcels")
+        self.clear_button = QPushButton(self.tr("Clear Parcels"))
         self.clear_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.clear_button.clicked.connect(self.clear_parcels)
 
-        self.back_button = QPushButton("Previous Window")
+        self.back_button = QPushButton(self.tr("Previous Window"))
         self.back_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.back_button.clicked.connect(self.back)
         form_layout.addRow(self.back_button)
 
-        self.top_left = QLabel("Coordinate A")
+        self.top_left = QLabel(self.tr("Coordinate A"))
         self.top_left_lat = QLabel("lat:")
         self.top_left_lat_input = QLineEdit("37.32500")
         self.top_left_lon = QLabel("lon:")
@@ -120,7 +120,7 @@ class PlannerMainWindow(QMainWindow):
         hbox.addWidget(self.top_left_lon_input)
         form_layout.addRow(hbox)
 
-        self.top_right = QLabel("Coordinate B")
+        self.top_right = QLabel(self.tr("Coordinate B"))
         self.top_right_lat = QLabel("lat:")
         self.top_right_lat_input = QLineEdit("37.32490")
         self.top_right_lon = QLabel("lon:")
@@ -134,7 +134,7 @@ class PlannerMainWindow(QMainWindow):
         hbox.addWidget(self.top_right_lon_input)
         form_layout.addRow(hbox)
 
-        self.bot_left = QLabel("Coordinate C")
+        self.bot_left = QLabel(self.tr("Coordinate C"))
         self.bot_left_lat = QLabel("lat:")
         self.bot_left_lat_input = QLineEdit("37.32466")
         self.bot_left_lon = QLabel("lon:")
@@ -149,7 +149,7 @@ class PlannerMainWindow(QMainWindow):
         form_layout.addRow(hbox)
 
 
-        self.bot_right = QLabel("Coordinate D")
+        self.bot_right = QLabel(self.tr("Coordinate D"))
         self.bot_right_lat = QLabel("lat:")
         self.bot_right_lat_input = QLineEdit("37.32427")
         self.bot_right_lon = QLabel("lon:")
@@ -163,36 +163,36 @@ class PlannerMainWindow(QMainWindow):
         hbox.addWidget(self.bot_right_lon_input)
         form_layout.addRow(hbox)
 
-        self.spraying_width = QLabel("Spraying Width")
+        self.spraying_width = QLabel(self.tr("Spraying Width"))
         self.spraying_width_input = QLineEdit("1.5")
         self.spraying_width.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.spraying_width_input.textChanged.connect(self.update_spray_width)
         form_layout.addRow(self.spraying_width, self.spraying_width_input)
 
         self.fit = QRadioButton()
-        self.fit.setText("Do you want parcels to fit the area?")
+        self.fit.setText(self.tr("Do you want parcels to fit the area?"))
         form_layout.addRow(self.fit)
 
 
-        self.save_button = QPushButton("Process")
+        self.save_button = QPushButton(self.tr("Process"))
         self.save_button.clicked.connect(self.save)
         self.save_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         form_layout.addWidget(self.save_button)
         
 
-        self.generate_report = QPushButton("Generate Report")
+        self.generate_report = QPushButton(self.tr("Generate Report"))
         self.generate_report.clicked.connect(self.report)
         self.generate_report.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         self.button_names = {i: f"{i}" for i in range(1, 11)}  # Adjust range based on the number of buttons
 
-        self.generate_mission = QPushButton(f"Save the mission")
+        self.generate_mission = QPushButton(self.tr("Save the mission"))
         self.generate_mission.clicked.connect(lambda: self.create_mavlink_script(self.path))
         self.generate_mission.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
 
         
-        self.total_length_label = QLabel("Total Path Length: 0 meters")
+        self.total_length_label = QLabel(self.tr("Total Path Length: 0 meters"))
         self.total_length_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         form_layout.addRow(self.clear_button)
@@ -240,19 +240,19 @@ class PlannerMainWindow(QMainWindow):
 
         form_layout.addRow(self.color_layout)
 
-        self.application_dose = QLabel("Application Dose (liters/hectare)")
+        self.application_dose = QLabel(self.tr("Application Dose (liters/hectare)"))
         self.application_dose_input = QLineEdit("300")
 
-        self.nozzle_rate = QLabel("Nozzle flow rate (liters/minute)")
+        self.nozzle_rate = QLabel(self.tr("Nozzle flow rate (liters/minute)"))
         self.nozzle_rate_input = QLineEdit("0.8")
 
-        self.nozzle_number = QLabel("Number of Nozzles")
+        self.nozzle_number = QLabel(self.tr("Number of Nozzles"))
         self.nozzle_number_input = QLineEdit("4")
 
-        self.set_alt = QLabel("Altitude (meters)")
+        self.set_alt = QLabel(self.tr("Altitude (meters)"))
         self.set_alt_input = QLineEdit("25")
 
-        self.set_acc = QLabel("Acceleration Buffer (meters)")
+        self.set_acc = QLabel(self.tr("Acceleration Buffer (meters)"))
         self.set_acc_input = QLineEdit("2")
 
         self.application_dose_input.textChanged.connect(self.calculate_velocity)
@@ -268,21 +268,22 @@ class PlannerMainWindow(QMainWindow):
         form_layout.addRow(self.set_acc, self.set_acc_input)
 
 
-        self.calculated_speed_label = QLabel("Calculated Ground Speed: 0 km/h")
+        self.calculated_speed_label = QLabel(self.tr("Calculated Ground Speed: 0 km/h"))
         form_layout.addRow(self.calculated_speed_label)
 
 
         form_layout.addRow(self.generate_mission)
         form_layout.addRow(self.generate_report)
 
-        self.width_label = QLabel("Parcel Width: 3.0 meters")
-        self.height_label = QLabel("Parcel Height: 5.0 meters")
-        self.gap_x_layout = QLabel("Gap X: 0.3 meters")
-        self.gap_y_layout = QLabel("Gap Y: 1.0 meters")
+        self.width_label = QLabel(self.tr("Parcel Width: {0} meters").format(3.0))
+        self.height_label = QLabel(self.tr("Parcel Height: {0} meters").format(5.0))
+        self.gap_x_layout = QLabel(self.tr("Gap X: {0} meters").format(0.3))
+        self.gap_y_layout = QLabel(self.tr("Gap Y: {0} meters").format(1.0))
 
         self.div = QLabel("----------------------------")
-        self.total_width = QLabel("Total Width: 19.5 meters")
-        self.total_height = QLabel("Total Height: 29.0 meters")
+        self.total_width = QLabel(self.tr("Total Width: {0} meters").format(19.5))
+        self.total_height = QLabel(self.tr("Total Height: {0} meters").format(29.0))
+
         form_layout.addRow(self.width_label)
         form_layout.addRow(self.height_label)
         form_layout.addRow(self.gap_x_layout)
@@ -319,8 +320,8 @@ class PlannerMainWindow(QMainWindow):
                 raise Exception
         except Exception:
             if self.set_acc_input.text() != "":
-                logger.error(f"Invalid input for Acceleration Buffer: {self.set_acc_input.text()}")
-                self.show_warning("Invalid Input", "Please enter a valid acceleration buffer.")
+                logger.error(self.tr("Invalid input for Acceleration Buffer: {0}").format(self.set_acc_input.text()))
+                self.show_warning(self.tr("Invalid Input"), self.tr("Please enter a valid acceleration buffer."))
                 self.acc_buffer = 2.0
             return
 
@@ -371,8 +372,8 @@ class PlannerMainWindow(QMainWindow):
                 raise Exception
         except Exception:
             if self.application_dose_input.text() != "":
-                logger.error(f"Invalid input for application_dose: {self.application_dose_input.text()}")
-                self.show_warning("Invalid Input", "Please enter a valid application dose.")
+                logger.error(self.tr("Invalid input for application dose: {0}").format(self.application_dose_input.text()))
+                self.show_warning(self.tr("Invalid Input"), self.tr("Please enter a valid application dose."))
             return
 
         try:
@@ -381,8 +382,8 @@ class PlannerMainWindow(QMainWindow):
                 raise Exception
         except Exception:
             if self.nozzle_rate_input.text() != "":
-                logger.error(f"Invalid input for nozzle_rate_input: {self.nozzle_rate_input.text()}")
-                self.show_warning("Invalid Input", "Please enter a valid nozzle rate.")
+                logger.error(self.tr("Invalid input for nozzle rate: {0}").format(self.nozzle_rate_input.text()))
+                self.show_warning(self.tr("Invalid Input"), self.tr("Please enter a valid nozzle rate."))
             return
         
         try:
@@ -391,9 +392,10 @@ class PlannerMainWindow(QMainWindow):
                 raise Exception
         except Exception:
             if self.nozzle_number_input.text() != "":
-                logger.error(f"Invalid input for nozzle_number_input: {self.nozzle_number_input.text()}")
-                self.show_warning("Invalid Input", "Please enter a valid nozzle rate.")
+                logger.error(self.tr("Invalid input for nozzle number: {0}").format(self.nozzle_number_input.text()))
+                self.show_warning(self.tr("Invalid Input"), self.tr("Please enter a valid nozzle number."))
             return
+
         
         try:
             spraying_width = float(self.spraying_width_input.text())
@@ -401,19 +403,21 @@ class PlannerMainWindow(QMainWindow):
                 raise Exception
         except Exception:
             if self.spraying_width_input.text() != "":
-                logger.error(f"Invalid input for spraying_width_input: {self.spraying_width_input.text()}")
-                self.show_warning("Invalid Input", "Please enter a valid nozzle rate.")
+                logger.error(self.tr("Invalid input for spraying width: {0}").format(self.spraying_width_input.text()))
+                self.show_warning(self.tr("Invalid Input"), self.tr("Please enter a valid spraying width."))
             return
+
 
         # Check if parcels are available
         if not self.parcel_coordinates:
-            self.show_warning("No Parcels", "Please save the area and generate parcels first.")
+            self.show_warning(self.tr("No Parcels"), self.tr("Please save the area and generate parcels first."))
             return
 
         # Check if current color is selected
         if not self.current_color:
-            self.show_warning("No Color Selected", "Please select a color to calculate velocity.")
+            self.show_warning(self.tr("No Color Selected"), self.tr("Please select a color to calculate velocity."))
             return
+
 
         # Filter parcels with the selected color
         parcels_to_spray = [parcel for parcel in self.parcel_coordinates if parcel['color'] == self.current_color]
@@ -422,12 +426,12 @@ class PlannerMainWindow(QMainWindow):
         if self.file_opened:
             number_of_parcels = len(self.parcel_coordinates)
             if number_of_parcels == 0:
-                self.show_warning("No Parcels", "There are no parcels available for calculation.")
+                self.show_warning(self.tr("No Parcels"), self.tr("There are no parcels available for calculation."))
                 return
         else:
             number_of_parcels = len(parcels_to_spray)
             if number_of_parcels == 0:
-                self.show_warning("No Parcels", "There are no parcels with the selected color.")
+                self.show_warning(self.tr("No Parcels"), self.tr("There are no parcels with the selected color."))
                 return
 
 
@@ -499,30 +503,180 @@ class PlannerMainWindow(QMainWindow):
 
 
     def create_toolbar(self):
-        """Create and add the toolbar to the main window."""
-        toolbar = QToolBar("Main Toolbar")
-        self.addToolBar(toolbar)
+        """Create and add the menu bar to the main window."""
+        # Create the menu bar
+        menu_bar = self.menuBar()
 
-        # Add an action with an icon
-        open_action = QAction(QIcon("open.png"), "Open", self)
-        open_action.setStatusTip("Open a file")
-        open_action.triggered.connect(self.open_file)  # Connect to a custom function
-        toolbar.addAction(open_action)
+        # Create the 'File' menu
+        self.file_menu = menu_bar.addMenu(self.tr("File"))
 
-        # Add a separator to the toolbar
-        toolbar.addSeparator()
+        # Add 'Open' action with an icon to the 'File' menu
+        self.open_action = QAction(QIcon("open.png"), self.tr("Open"), self)
+        self.open_action.setStatusTip(self.tr("Open a file"))
+        self.open_action.triggered.connect(self.open_file)  # Connect to a custom function
+        self.file_menu.addAction(self.open_action)
 
-        # Add another action, for example, Save
-        save_action = QAction(QIcon("save.png"), "Save", self)
-        save_action.setStatusTip("Save your work")
-        save_action.triggered.connect(self.save_file)  # Connect to a custom function
-        toolbar.addAction(save_action)
+        # Add a separator to the 'File' menu
+        self.file_menu.addSeparator()
 
-        # Add a Quit action
-        # quit_action = QAction(QIcon("quit.png"), "Quit", self)
-        # quit_action.setStatusTip("Quit the application")
-        # quit_action.triggered.connect(self.close)  # This will close the application
-        # toolbar.addAction(quit_action)
+        # Add 'Save' action with an icon to the 'File' menu
+        self.save_action = QAction(QIcon("save.png"), self.tr("Save"), self)
+        self.save_action.setStatusTip(self.tr("Save your work"))
+        self.save_action.triggered.connect(self.save_file)  # Connect to a custom function
+        self.file_menu.addAction(self.save_action)
+
+        # Create the 'Settings' menu
+        self.settings_menu = menu_bar.addMenu(self.tr("Settings"))
+
+        # Add Night Mode option to settings
+        self.night_mode_action = QAction(self.tr("Night Mode"), self, checkable=True)
+        self.night_mode_action.triggered.connect(self.toggle_night_mode)
+        self.settings_menu.addAction(self.night_mode_action)
+
+        # Create the 'Change Language' submenu under 'Settings'
+        self.language_menu = self.settings_menu.addMenu(self.tr("Change Language"))
+
+        # Add language options to the language menu
+        self.lang_action_en = QAction("English", self, checkable=True)
+        self.lang_action_en.triggered.connect(lambda: self.change_language('en'))
+        self.language_menu.addAction(self.lang_action_en)
+
+        self.lang_action_es = QAction("Español", self, checkable=True)
+        self.lang_action_es.triggered.connect(lambda: self.change_language('es'))
+        self.language_menu.addAction(self.lang_action_es)
+
+        # Set the default checked language (e.g., English as default)
+        self.lang_action_en.setChecked(True)
+
+    def change_language(self, language):
+        # Load the appropriate language file
+        translator = QTranslator()
+        if language == 'en':
+            translator.load(temp_resource_path("translated_en.qm"))
+            self.lang_action_en.setChecked(True)
+            self.lang_action_es.setChecked(False)
+            app_state.language = "en"
+        elif language == 'es':
+            translator.load(temp_resource_path("translated_es.qm"))
+            self.lang_action_es.setChecked(True)
+            self.lang_action_en.setChecked(False)
+            app_state.language = "es"
+        
+        # Reapply the translator to the app
+        QApplication.instance().installTranslator(translator)
+
+        # Retranslate the UI
+        self.retranslateUi()  # Assuming you have this function implemented
+
+    def toggle_night_mode(self):
+        """Toggles between day and night mode stylesheets."""
+        if self.night_mode_action.isChecked():
+            # Apply night mode
+            dark_stylesheet = """
+            QMainWindow {
+                background-color: #2E2E2E;
+                color: white;
+            }
+            QLabel, QLineEdit, QPushButton, QToolBar, QMenuBar, QStatusBar, QMessageBox, QGraphicsView, QGraphicsRectItem, QGraphicsTextItem {
+                background-color: #3A3A3A;
+                color: white;
+            }
+            QLineEdit {
+                background-color: #454545;
+            }
+            QPushButton {
+                background-color: #3A3A3A;
+                border: 1px solid #555555;
+            }
+            QPushButton:pressed {
+                background-color: #2A2A2A;
+            }
+            QMenuBar {
+                background-color: #2E2E2E;
+            }
+            QMenuBar::item:selected {
+                background-color: #4E4E4E;
+            }
+            QPushButton {
+            background-color: #3a3a3a;
+            color: #ffffff; /* Ensure button text is white */
+            border: 1px solid #ffffff;
+            }
+            QRadioButton {
+                color: #ffffff; /* Ensure radio button text is white */
+            }
+            """
+            self.setStyleSheet(dark_stylesheet)
+            app_state.night_mode = True
+        else:
+            # Apply day mode (reset stylesheet)
+            self.setStyleSheet("")
+            app_state.night_mode = False
+                
+    def retranslateUi(self):
+        """Update all translatable UI elements."""
+        # Update buttons
+        # Update menu bar items
+        self.file_menu.setTitle(self.tr("File"))
+        self.save_action.setText(self.tr("Save"))
+        self.open_action.setText(self.tr("Open"))
+        self.settings_menu.setTitle(self.tr("Settings"))
+        self.night_mode_action.setText(self.tr("Night Mode"))
+        self.language_menu.setTitle(self.tr("Change Language"))
+        self.lang_action_en.setText(self.tr("English"))
+        self.lang_action_es.setText(self.tr("Español"))
+
+        self.clear_button.setText(self.tr("Clear Parcels"))
+        self.back_button.setText(self.tr("Previous Window"))
+        self.save_button.setText(self.tr("Process"))
+        self.generate_report.setText(self.tr("Generate Report"))
+        self.generate_mission.setText(self.tr("Save the mission"))
+
+        # Update labels for coordinates
+        self.top_left.setText(self.tr("Coordinate A"))
+        self.top_left_lat.setText(self.tr("lat:"))
+        self.top_left_lon.setText(self.tr("lon:"))
+
+        self.top_right.setText(self.tr("Coordinate B"))
+        self.top_right_lat.setText(self.tr("lat:"))
+        self.top_right_lon.setText(self.tr("lon:"))
+
+        self.bot_left.setText(self.tr("Coordinate C"))
+        self.bot_left_lat.setText(self.tr("lat:"))
+        self.bot_left_lon.setText(self.tr("lon:"))
+
+        self.bot_right.setText(self.tr("Coordinate D"))
+        self.bot_right_lat.setText(self.tr("lat:"))
+        self.bot_right_lon.setText(self.tr("lon:"))
+
+        # Update spraying settings
+        self.spraying_width.setText(self.tr("Spraying Width"))
+        self.fit.setText(self.tr("Do you want parcels to fit the area?"))
+
+        # Update velocity calculation labels
+        self.application_dose.setText(self.tr("Application Dose (liters/hectare)"))
+        self.nozzle_rate.setText(self.tr("Nozzle flow rate (liters/minute)"))
+        self.nozzle_number.setText(self.tr("Number of Nozzles"))
+        self.set_alt.setText(self.tr("Altitude (meters)"))
+        self.set_acc.setText(self.tr("Acceleration Buffer (meters)"))
+
+        # Update calculated values
+        self.calculated_speed_label.setText(self.tr("Calculated Ground Speed: 0 km/h"))
+        self.total_length_label.setText(self.tr("Total Path Length: 0 meters"))
+        
+
+        self.width_label.setText(self.tr("Parcel Width: {0} meters").format(self.width))
+        self.height_label.setText(self.tr("Parcel Height: {0} meters").format(self.height))
+        self.gap_x_layout.setText(self.tr("Gap X: {0} meters").format(self.gap_x))
+        self.gap_y_layout.setText(self.tr("Gap Y: {0} meters").format(self.gap_y))
+
+        total_width = self.width * self.count_x + (self.count_x - 1) * self.gap_x
+        total_height = self.height * self.count_y + (self.count_y - 1) * self.gap_y
+
+        self.total_width.setText(self.tr("Total Width: {0} meters").format(total_width))
+        self.total_height.setText(self.tr("Total Height: {0} meters").format(total_height))
+
+
 
     def open_file(self):
         logger.debug("Open file action triggered")
@@ -544,7 +698,7 @@ class PlannerMainWindow(QMainWindow):
                     self.restore_app_state(loaded_data)
             except Exception as e:
                 logger.error(f"Error opening or parsing file: {e}")
-                self.show_warning("Open Failed", f"Failed to open planner state: {e}")
+                self.show_warning(self.tr("Open Failed"), self.tr(f"Failed to open planner state: {e}"))
 
     def restore_app_state(self, data):
         logger.debug(f"Restoring planner state with data: {data}")
@@ -664,7 +818,7 @@ class PlannerMainWindow(QMainWindow):
             self.show_info("Restore Successful", "Planner state has been restored successfully.")
         except Exception as e:
             logger.error(f"Error restoring planner state: {e}")
-            self.show_warning("Restore Failed", f"Failed to restore planner state: {e}")
+            self.show_warning(self.tr("Restore Failed"), self.tr(f"Failed to restore planner state: {e}"))
 
 
     def save_file(self):
@@ -728,10 +882,10 @@ class PlannerMainWindow(QMainWindow):
                     self.show_info("Save Successful", "Planner state has been saved successfully.")
                 except Exception as e:
                     logger.error(f"Failed to save planner state: {e}")
-                    self.show_warning("Save Failed", f"Failed to save planner state: {e}")
+                    self.show_warning(self.tr("Save Failed"), self.tr(f"Failed to save planner state: {e}"))
         except Exception as e:
                 logger.error(f"Failed to save planner state: {e}")
-                self.show_warning("Save Failed", f"Failed to save planner state: {e}")
+                self.show_warning(self.tr("Save Failed"), self.tr(f"Failed to save planner state: {e}"))
 
 
 
@@ -756,6 +910,7 @@ class PlannerMainWindow(QMainWindow):
         self.parcel_coordinates = None
         self.button_params = {int(key): value for key, value in app_state.button_params.items()}
         self.acc_buffer = app_state.acc_buffer
+        
 
         self.width_label.setText(f"Parcel Width: {self.width} meters")
         self.height_label.setText(f"Parcel Height: {self.height} meters")
@@ -850,6 +1005,10 @@ class PlannerMainWindow(QMainWindow):
         self.load_coordinates_from_config()
         self.clear_parcels()
 
+        self.change_language(app_state.language)
+        self.night_mode_action.setChecked(app_state.night_mode)
+        self.toggle_night_mode()
+
         if app_state.file_opened:
             self.save()
 
@@ -891,7 +1050,7 @@ class PlannerMainWindow(QMainWindow):
         """
         logger.debug("generating report")
         if not self.parcel_coordinates:
-            self.show_warning("No Parcels", "There are no parcels to generate a report.")
+            self.show_warning(self.tr("No Parcels"), self.tr("There are no parcels to generate a report."))
             return
 
         # Determine whether to use fitted dimensions or default ones
@@ -1181,7 +1340,7 @@ class PlannerMainWindow(QMainWindow):
             b_r_lat = float(self.bot_right_lat_input.text())
             b_r_lon = float(self.bot_right_lon_input.text())
         except:
-            self.show_warning("Wrong input", "Please check inputs for coordinates")
+            self.show_warning(self.tr("Wrong Input"), self.tr("Please check inputs for coordinates"))
             return
 
         area_corners = [
@@ -1226,32 +1385,27 @@ class PlannerMainWindow(QMainWindow):
             self.width = round(self.exact_width)
             self.height = round(self.exact_height)
 
-            # Update the labels with the fitted dimensions
-            self.width_label.setText(f"Parcel Width: {self.exact_width:.2f} meters (≈ {self.width})")
-            self.height_label.setText(f"Parcel Height: {self.exact_height:.2f} meters (≈ {self.height})")
-            self.gap_x_layout.setText(f"Gap X: {self.gap_x:.2f} meters")
-            self.gap_y_layout.setText(f"Gap Y: {self.gap_y:.2f} meters")
-            self.total_width.setText(f"Total Width: {total_width:.2f} meters")
-            self.total_height.setText(f"Total Height: {total_height:.2f} meters")
+            # Update the labels with the fitted dimensions using self.tr
+            self.width_label.setText(self.tr("Parcel Width: {0:.2f} meters (≈ {1})").format(self.exact_width, self.width))
+            self.height_label.setText(self.tr("Parcel Height: {0:.2f} meters (≈ {1})").format(self.exact_height, self.height))
+            self.gap_x_layout.setText(self.tr("Gap X: {0:.2f} meters").format(self.gap_x))
+            self.gap_y_layout.setText(self.tr("Gap Y: {0:.2f} meters").format(self.gap_y))
+            self.total_width.setText(self.tr("Total Width: {0:.2f} meters").format(total_width))
+            self.total_height.setText(self.tr("Total Height: {0:.2f} meters").format(total_height))
 
             
         else:
-            # self.width = app_state.width
-            # self.height = app_state.height
-            # self.gap_x = app_state.gap_x
-            # self.gap_y = app_state.gap_y
-            # self.count_x = app_state.count_x
-            # self.count_y = app_state.count_y
             try:
-                total_width = self.width * self.count_x + (self.count_x-1) * self.gap_x
-                total_height = self.height * self.count_y + (self.count_y-1) * self.gap_y
-                # Update the labels with the fitted dimensions
-                self.width_label.setText(f"Parcel Width: {self.width:.2f} meters")
-                self.height_label.setText(f"Parcel Height: {self.height:.2f} meters")
-                self.gap_x_layout.setText(f"Gap X: {self.gap_x:.2f} meters")
-                self.gap_y_layout.setText(f"Gap Y: {self.gap_y:.2f} meters")
-                self.total_width.setText(f"Total Width: {total_width:.2f} meters")
-                self.total_height.setText(f"Total Height: {total_height:.2f} meters")
+                total_width = self.width * self.count_x + (self.count_x - 1) * self.gap_x
+                total_height = self.height * self.count_y + (self.count_y - 1) * self.gap_y
+
+                # Update the labels with the fitted dimensions using self.tr
+                self.width_label.setText(self.tr("Parcel Width: {0:.2f} meters").format(self.width))
+                self.height_label.setText(self.tr("Parcel Height: {0:.2f} meters").format(self.height))
+                self.gap_x_layout.setText(self.tr("Gap X: {0:.2f} meters").format(self.gap_x))
+                self.gap_y_layout.setText(self.tr("Gap Y: {0:.2f} meters").format(self.gap_y))
+                self.total_width.setText(self.tr("Total Width: {0:.2f} meters").format(total_width))
+                self.total_height.setText(self.tr("Total Height: {0:.2f} meters").format(total_height))
             except:
                 self.width = app_state.width
                 self.height = app_state.height
@@ -1259,22 +1413,24 @@ class PlannerMainWindow(QMainWindow):
                 self.gap_y = app_state.gap_y
                 self.count_x = app_state.count_x
                 self.count_y = app_state.count_y
-                total_width = self.width * self.count_x + (self.count_x-1) * self.gap_x
-                total_height = self.height * self.count_y + (self.count_y-1) * self.gap_y
-                # Update the labels with the fitted dimensions
-                self.width_label.setText(f"Parcel Width: {self.width:.2f} meters")
-                self.height_label.setText(f"Parcel Height: {self.height:.2f} meters")
-                self.gap_x_layout.setText(f"Gap X: {self.gap_x:.2f} meters")
-                self.gap_y_layout.setText(f"Gap Y: {self.gap_y:.2f} meters")
-                self.total_width.setText(f"Total Width: {total_width:.2f} meters")
-                self.total_height.setText(f"Total Height: {total_height:.2f} meters")
-                
+                total_width = self.width * self.count_x + (self.count_x - 1) * self.gap_x
+                total_height = self.height * self.count_y + (self.count_y - 1) * self.gap_y
+
+                # Update the labels with the fitted dimensions using self.tr
+                self.width_label.setText(self.tr("Parcel Width: {0:.2f} meters").format(self.width))
+                self.height_label.setText(self.tr("Parcel Height: {0:.2f} meters").format(self.height))
+                self.gap_x_layout.setText(self.tr("Gap X: {0:.2f} meters").format(self.gap_x))
+                self.gap_y_layout.setText(self.tr("Gap Y: {0:.2f} meters").format(self.gap_y))
+                self.total_width.setText(self.tr("Total Width: {0:.2f} meters").format(total_width))
+                self.total_height.setText(self.tr("Total Height: {0:.2f} meters").format(total_height))
         try:
             generator = ParcelGenerator(area_corners, self.width, self.height, self.gap_x, self.gap_y, self.count_x, self.count_y, is_fit, self.color_codes_list)
             self.parcel_coordinates = (generator.generate_parcel_coordinates())
         except:
-            self.show_warning("Saving Failed!", "Please check the input fields and try again.")
+            self.show_warning(self.tr("Saving Failed!"), self.tr("Please check the input fields and try again."))
             return
+        
+        self.retranslateUi()
 
         js_code = "var parcels = [];\n"  # Initialize the parcels array
         for i, parcel_info in enumerate(self.parcel_coordinates):
@@ -1439,15 +1595,15 @@ class PlannerMainWindow(QMainWindow):
         try:
             spraying_width = float(self.spraying_width_input.text())
         except ValueError:
-            self.show_warning("Invalid Input", "Please enter a valid spraying width.")
+            self.show_warning(self.tr("Invalid Input"), self.tr("Please enter a valid spraying width."))
             return False
 
         all_parcels = self.get_all_parcels()
         if all_parcels is None:
-            self.show_warning("First Save the Area Coordinates", "To generate a path you should save the coordinates first.")
+            self.show_warning(self.tr("First Save the Area Coordinates"), self.tr("To generate a path you should save the coordinates first."))
             return False
         if self.current_color is None:
-            self.show_warning("First Choose a Color", "To generate a path you should choose a color first.")
+            self.show_warning(self.tr("First Choose a Color"), self.tr("To generate a path you should choose a color first."))
             return False
 
         # Check if the path for the current color already exists
@@ -1462,7 +1618,7 @@ class PlannerMainWindow(QMainWindow):
 
         # Check if the parcel height can be fully divided by the spraying width
         if self.width % spraying_width != 0:
-            self.show_warning("Spraying Width Error", "The parcel height cannot be evenly divided by the spraying width.")
+            self.show_warning(self.tr("Spraying Width Error"), self.tr("The parcel height cannot be evenly divided by the spraying width."))
             return
 
         # Prepare to store the parcel points and paths
@@ -1824,15 +1980,15 @@ class PlannerMainWindow(QMainWindow):
         """
         logger.debug(f"creating mavlink script with the value of: {path_coordinates}")
         if not path_coordinates:
-            self.show_warning("Mission cannot be created", "To generate the mission successfully save the map location and generate the path.")
+            self.show_warning(self.tr("Mission cannot be created"), self.tr("To generate the mission successfully save the map location and generate the path."))
             return
 
         if self.current_path is None:
-            self.show_warning("Mission cannot be created", "To generate the mission successfully pick the color for the mission")
+            self.show_warning(self.tr("Mission cannot be created"), self.tr("To generate the mission successfully pick the color for the mission"))
             return
 
         if self.current_color is None:
-            self.show_warning("Mission cannot be created", "To generate the mission successfully pick the color for the mission")
+            self.show_warning(self.tr("Mission cannot be created"), self.tr("To generate the mission successfully pick the color for the mission"))
             return
 
         name = self.hex_to_color_name(self.current_color)
@@ -1841,11 +1997,11 @@ class PlannerMainWindow(QMainWindow):
         try:
             ground_speed_m_s = self.velocity_results.get("ground_speed_m_s")
         except:
-            self.show_warning("Mission cannot be created", "To generate the mission successfully firstly pick the color for the mission")
+            self.show_warning(self.tr("Mission cannot be created"), self.tr("To generate the mission successfully firstly pick the color for the mission"))
             return
 
         if not ground_speed_m_s:
-            self.show_warning("Speed Not Calculated", "Please calculate the velocity before generating the mission.")
+            self.show_warning(self.tr("Speed Not Calculated"), self.tr("Please calculate the velocity before generating the mission."))
             return
 
         # Get the altitude from the input
@@ -1854,7 +2010,7 @@ class PlannerMainWindow(QMainWindow):
             if altitude <= 0:
                 raise ValueError
         except ValueError:
-            self.show_warning("Invalid Altitude", "Please enter a valid altitude.")
+            self.show_warning(self.tr("Invalid Altitude"), self.tr("Please enter a valid altitude."))
             return
 
         # Get the home coordinates
@@ -1862,7 +2018,7 @@ class PlannerMainWindow(QMainWindow):
             home_lat = float(self.top_left_lat_input.text())
             home_lon = float(self.top_left_lon_input.text())
         except ValueError:
-            self.show_warning("Invalid lat - lon", "Please enter a valid coordinate.")
+            self.show_warning(self.tr("Invalid lat - lon", "Please enter a valid coordinate."))
             return
 
         mavlink_data = ["QGC WPL 110"]
@@ -1881,12 +2037,12 @@ class PlannerMainWindow(QMainWindow):
         parcel_points = self.parcel_points_by_color.get(self.current_color, [])
 
         if not parcel_points:
-            self.show_warning("No Parcel Points", "No parcel points found for the current color.")
+            self.show_warning(self.tr("No Parcel Points"), self.tr("No parcel points found for the current color."))
             return
 
         # Ensure the path coordinates match the parcel points
         if len(path_coordinates) != 2 * len(parcel_points):
-            self.show_warning("Data Mismatch", "Path coordinates do not match parcel points.")
+            self.show_warning(self.tr("Data Mismatch"), self.tr("Path coordinates do not match parcel points."))
             return
 
         # Iterate over parcels

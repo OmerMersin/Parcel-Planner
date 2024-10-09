@@ -11,6 +11,25 @@ import os
 import json
 
 
+# Night mode, spanish support, run without consol
+
+from PyQt6.QtCore import QTranslator, QLocale
+
+def load_translations(app):
+    translator = QTranslator()
+
+    # Detect system language and load corresponding translation
+    system_locale = QLocale.system().name()
+
+    # Map system locales to specific translations (es, fr, de)
+    if system_locale.startswith("es"):
+        translation_file = resource_path('translated_es.qm')
+    else:
+        return  # No translation, default to English
+
+    translator.load(translation_file)
+    app.installTranslator(translator)
+
 log_file_path = os.path.join(os.path.dirname(__file__), "app.log")
 sys.stdout = open(log_file_path, "w")
 sys.stderr = open(log_file_path, "w")
@@ -26,9 +45,22 @@ def resource_path(relative_path):
 
     return os.path.join(base_path, relative_path)
 
+
+def per_resource_path(relative_path):
+    """ Get absolute path to resource, works for PyInstaller executables """
+    try:
+        # PyInstaller creates a temp folder and stores resources in _MEIPASS
+        base_path = sys._MEIPASS
+    except AttributeError:
+        # If not running in a PyInstaller bundle, use the current directory
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
 # Generate the log file name once
 log_file_name = f"{time.strftime('%Y-%m-%d_%H-%M-%S')}.txt"
 log_file_path = os.path.join(resource_path('logs'), log_file_name)
+translation_file = per_resource_path('translated_es.qm')
+print(f"Loading translation file: {translation_file}")
 
 def create_logger():
     logs_dir = resource_path('logs')
@@ -80,6 +112,8 @@ class AppState:
         self.button_params = {}
         self.acc_buffer = 2.0
         self.file_opened = False
+        self.language = "en" 
+        self.night_mode = False
 
     
     def save_state(self, button_names, width, height, gap_x, gap_y, count_x, count_y, colored_parcels):
@@ -333,8 +367,9 @@ class ParcelField(QWidget):
         displayed_width = total_width * scale_factor
         displayed_height = total_height * scale_factor
 
-        x_label = QGraphicsTextItem(f"Total X: {total_width}m")
-        y_label = QGraphicsTextItem(f"Total Y: {total_height}m")
+        x_label = QGraphicsTextItem(self.tr("Total X: {0}m").format(total_width))
+        y_label = QGraphicsTextItem(self.tr("Total Y: {0}m").format(total_height))
+
 
         x_label.setPos(offset_x + displayed_width / 2 - x_label.boundingRect().width() / 2, self.total_height - self.margin + 5)
         y_label.setPos(self.margin - y_label.boundingRect().width() - 5, offset_y + displayed_height / 2 - y_label.boundingRect().height() / 2)
@@ -424,8 +459,8 @@ class ParcelField(QWidget):
                     # If either warning condition was triggered, ask the user
                     if warning_message:
                         user_choice = self.show_warning_rep(
-                            "Duplicate Color",
-                            warning_message + "Do you want to apply this color?"
+                            self.tr("Duplicate Color"),
+                            self.tr("{0} Do you want to apply this color?").format(warning_message)
                         )
                         # If the user clicks "Cancel", return without applying the color
                         if user_choice == "Cancel":
@@ -448,11 +483,13 @@ class ParcelField(QWidget):
                         1 for color_data in self.parcel_colors.values()
                         if color_data[0] == self.current_color.name()
                     )
-
+                    
                     if color_usage_count > self.count_x:
                         user_choice = self.show_warning_rep(
-                            "Color Usage Limit Reached",
-                            f"The color '{self.hex_to_color_name(self.current_color.name())}' has already been used {color_usage_count} times, which exceeds the maximum allowed ({self.count_x}).\nDo you still want to apply this color?"
+                            self.tr("Color Usage Limit Reached"),
+                            self.tr(
+                                "The color '{0}' has already been used {1} times, which exceeds the maximum allowed ({2}).\nDo you still want to apply this color?"
+                            ).format(self.hex_to_color_name(self.current_color.name()), color_usage_count, self.count_x)
                         )
                         if user_choice == "Cancel":
                             return  # Prevent applying the color
@@ -503,8 +540,8 @@ class ParcelField(QWidget):
         msg.setWindowTitle("Warning")
 
         # Add custom buttons for the specific action (Apply and Cancel)
-        apply_button = msg.addButton("Apply", QMessageBox.ButtonRole.AcceptRole)
-        cancel_button = msg.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
+        apply_button = msg.addButton(self.tr("Apply"), QMessageBox.ButtonRole.AcceptRole)
+        cancel_button = msg.addButton(self.tr("Cancel"), QMessageBox.ButtonRole.RejectRole)
         
         msg.setDefaultButton(cancel_button)  # Set "Cancel" as the default button
 
@@ -589,17 +626,17 @@ class ParcelField(QWidget):
             if overused_colors:
                 for color, count in overused_colors.items():
                     color_name = self.hex_to_color_name(color)
-                    warning_message += f"Color '{color_name}' is used {count} times, which exceeds the number of columns ({self.count_x}).\n"
+                    warning_message += self.tr("Color '{0}' is used {1} times, which exceeds the number of columns ({2}).\n").format(color_name, count, self.count_x)
 
             # Add empty parcel information to the message
             if empty_rows:
                 empty_rows_str = ", ".join(str(row) for row in empty_rows)
-                warning_message += f"Rows {empty_rows_str} have empty (white) parcels.\n"
+                warning_message += self.tr("Rows {0} have empty (white) parcels.\n").format(empty_rows_str)
 
             # Show the warning message and ask if the user wants to proceed
             user_choice = self.show_warning(
-                "Grid Check",
-                warning_message + "Do you want to proceed anyway?"
+                self.tr("Grid Check"),
+                warning_message + self.tr("Do you want to proceed anyway?")
             )
 
             # Check which button the user clicked
@@ -660,51 +697,51 @@ class MainWindow(QMainWindow):
         self.parcel_field = ParcelField()
         self.create_toolbar()
 
-        self.width_label = QLabel("Parcel Width:")
+        self.width_label = QLabel(self.tr("Parcel Width:"))
         self.width_input = QLineEdit("3.0")
         self.width_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.width_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.width_input.setAlignment(Qt.AlignmentFlag.AlignRight)
 
 
-        self.height_label = QLabel("Parcel Height:")
+        self.height_label = QLabel(self.tr("Parcel Height:"))
         self.height_input = QLineEdit("5.0")
         self.height_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.height_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.height_input.setAlignment(Qt.AlignmentFlag.AlignRight)
 
 
-        self.gap_x_label = QLabel("Gap X:")
+        self.gap_x_label = QLabel(self.tr("Gap X:"))
         self.gap_x_input = QLineEdit("0.3")
         self.gap_x_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.gap_x_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.gap_x_input.setAlignment(Qt.AlignmentFlag.AlignRight)
 
-        self.gap_y_label = QLabel("Gap Y:")
+        self.gap_y_label = QLabel(self.tr("Gap Y:"))
         self.gap_y_input = QLineEdit("1.0")
         self.gap_y_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.gap_y_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.gap_y_input.setAlignment(Qt.AlignmentFlag.AlignRight)
 
-        self.meter_label = QLabel("meters")
+        self.meter_label = QLabel(self.tr("meters"))
         width_layout = QHBoxLayout()
         width_layout.addWidget(self.width_label)
         width_layout.addWidget(self.width_input)  # Add QLineEdit to the layout
         width_layout.addWidget(self.meter_label)  # Add QLabel to the layout
 
-        self.meter_label = QLabel("meters")
+        self.meter_label = QLabel(self.tr("meters"))
         height_layout = QHBoxLayout()
         height_layout.addWidget(self.height_label)
         height_layout.addWidget(self.height_input)  # Add QLineEdit to the layout
         height_layout.addWidget(self.meter_label)  # Add QLabel to the layout
 
-        self.meter_label = QLabel("meters")
+        self.meter_label = QLabel(self.tr("meters"))
         gap_x_layout = QHBoxLayout()
         gap_x_layout.addWidget(self.gap_x_label)
         gap_x_layout.addWidget(self.gap_x_input)  # Add QLineEdit to the layout
         gap_x_layout.addWidget(self.meter_label)  # Add QLabel to the layout
 
-        self.meter_label = QLabel("meters")
+        self.meter_label = QLabel(self.tr("meters"))
         gap_y_layout = QHBoxLayout()
         gap_y_layout.addWidget(self.gap_y_label)
         gap_y_layout.addWidget(self.gap_y_input)  # Add QLineEdit to the layout
@@ -712,7 +749,7 @@ class MainWindow(QMainWindow):
 
         self.empty_label = QLabel("           ")
         count_x_layout = QHBoxLayout()
-        self.count_x_label = QLabel("Parcels on X axis:")
+        self.count_x_label = QLabel(self.tr("Parcels on X axis:"))
         self.count_x_input = QLineEdit("6")
         self.count_x_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.count_x_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -723,7 +760,7 @@ class MainWindow(QMainWindow):
 
         self.empty_label = QLabel("           ")
         count_y_layout = QHBoxLayout()
-        self.count_y_label = QLabel("Parcels on Y axis:")
+        self.count_y_label = QLabel(self.tr("Parcels on Y axis:"))
         self.count_y_input = QLineEdit("5")
         self.count_y_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.count_y_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -733,11 +770,11 @@ class MainWindow(QMainWindow):
         count_y_layout.addWidget(self.empty_label)
 
 
-        self.clear_button = QPushButton("Clear Parcels")
+        self.clear_button = QPushButton(self.tr("Clear Parcels"))
         self.clear_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.clear_button.clicked.connect(self.clear_parcels)
 
-        self.plan_button = QPushButton("Planning Window")
+        self.plan_button = QPushButton(self.tr("Planning Window"))
         self.plan_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.plan_button.clicked.connect(self.planning)
 
@@ -816,30 +853,127 @@ class MainWindow(QMainWindow):
         super().resizeEvent(event)
 
     def create_toolbar(self):
-        """Create and add the toolbar to the main window."""
-        toolbar = QToolBar("Main Toolbar")
-        self.addToolBar(toolbar)
+        """Create and add the menu bar to the main window."""
+        # Create the menu bar
+        menu_bar = self.menuBar()
 
-        # Add an action with an icon
-        open_action = QAction(QIcon("open.png"), "Open", self)
-        open_action.setStatusTip("Open a file")
-        open_action.triggered.connect(self.open_file)  # Connect to a custom function
-        toolbar.addAction(open_action)
+        # Create the 'File' menu
+        self.file_menu = menu_bar.addMenu(self.tr("File"))
 
-        # Add a separator to the toolbar
-        toolbar.addSeparator()
+        # Add 'Open' action with an icon to the 'File' menu
+        self.open_action = QAction(QIcon("open.png"), self.tr("Open"), self)
+        self.open_action.setStatusTip(self.tr("Open a file"))
+        self.open_action.triggered.connect(self.open_file)  # Connect to a custom function
+        self.file_menu.addAction(self.open_action)
 
-        # Add another action, for example, Save
-        save_action = QAction(QIcon("save.png"), "Save", self)
-        save_action.setStatusTip("Save your work")
-        save_action.triggered.connect(self.save_file)  # Connect to a custom function
-        toolbar.addAction(save_action)
+        # Add a separator to the 'File' menu
+        self.file_menu.addSeparator()
 
-        # Add a Quit action
-        # quit_action = QAction(QIcon("quit.png"), "Quit", self)
-        # quit_action.setStatusTip("Quit the application")
-        # quit_action.triggered.connect(self.confirm_quit)  # Connect to the quit confirmation dialog
-        # toolbar.addAction(quit_action)
+        # Add 'Save' action with an icon to the 'File' menu
+        self.save_action = QAction(QIcon("save.png"), self.tr("Save"), self)
+        self.save_action.setStatusTip(self.tr("Save your work"))
+        self.save_action.triggered.connect(self.save_file)  # Connect to a custom function
+        self.file_menu.addAction(self.save_action)
+
+        # Create the 'Settings' menu
+        self.settings_menu = menu_bar.addMenu(self.tr("Settings"))
+
+        # Add Night Mode option to settings
+        self.night_mode_action = QAction(self.tr("Night Mode"), self, checkable=True)
+        self.night_mode_action.triggered.connect(self.toggle_night_mode)
+        self.settings_menu.addAction(self.night_mode_action)
+
+        # Create the 'Change Language' submenu under 'Settings'
+        self.language_menu = self.settings_menu.addMenu(self.tr("Change Language"))
+
+        # Add language options to the language menu
+        self.lang_action_en = QAction("English", self, checkable=True)
+        self.lang_action_en.triggered.connect(lambda: self.change_language('en'))
+        self.language_menu.addAction(self.lang_action_en)
+
+        self.lang_action_es = QAction("Español", self, checkable=True)
+        self.lang_action_es.triggered.connect(lambda: self.change_language('es'))
+        self.language_menu.addAction(self.lang_action_es)
+
+        # Set the default checked language (e.g., English as default)
+        self.lang_action_en.setChecked(True)
+
+    def retranslateUi(self):
+        """Update all translatable UI elements."""
+
+        # Update menu bar items
+        self.file_menu.setTitle(self.tr("File"))
+        self.save_action.setText(self.tr("Save"))
+        self.open_action.setText(self.tr("Open"))
+        self.settings_menu.setTitle(self.tr("Settings"))
+        self.night_mode_action.setText(self.tr("Night Mode"))
+        self.language_menu.setTitle(self.tr("Change Language"))
+        self.lang_action_en.setText(self.tr("English"))
+        self.lang_action_es.setText(self.tr("Español"))
+
+        # Update tooltips or status tips if you have them
+        self.save_action.setStatusTip(self.tr("Save your work"))
+        self.open_action.setStatusTip(self.tr("Open a file"))
+
+        # Update form labels
+        self.width_label.setText(self.tr("Parcel Width:"))
+        self.height_label.setText(self.tr("Parcel Height:"))
+        self.gap_x_label.setText(self.tr("Gap X:"))
+        self.gap_y_label.setText(self.tr("Gap Y:"))
+        self.count_x_label.setText(self.tr("Parcels on X axis:"))
+        self.count_y_label.setText(self.tr("Parcels on Y axis:"))
+
+        # Update unit labels
+        self.meter_label.setText(self.tr("meters"))
+
+        # Update buttons
+        self.clear_button.setText(self.tr("Clear Parcels"))
+        self.plan_button.setText(self.tr("Planning Window"))
+
+        # Update QMessageBox for warnings and information
+        # self.confirm_quit_msg.setWindowTitle(self.tr("Confirm Quit"))
+        # self.confirm_quit_msg.setText(self.tr("Do you want to quit without saving?"))
+        # self.confirm_quit_msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel)
+        # self.confirm_quit_msg.button(QMessageBox.StandardButton.Yes).setText(self.tr("Yes"))
+        # self.confirm_quit_msg.button(QMessageBox.StandardButton.No).setText(self.tr("No"))
+        # self.confirm_quit_msg.button(QMessageBox.StandardButton.Cancel).setText(self.tr("Cancel"))
+
+    def toggle_night_mode(self):
+        """Toggles between day and night mode stylesheets."""
+        if self.night_mode_action.isChecked():
+            # Apply night mode
+            dark_stylesheet = """
+            QMainWindow {
+                background-color: #2E2E2E;
+                color: white;
+            }
+            QLabel, QLineEdit, QPushButton, QToolBar, QMenuBar, QStatusBar, QMessageBox, QGraphicsView, QGraphicsRectItem, QGraphicsTextItem {
+                background-color: #3A3A3A;
+                color: white;
+            }
+            QLineEdit {
+                background-color: #454545;
+            }
+            QPushButton {
+                background-color: #3A3A3A;
+                border: 1px solid #555555;
+            }
+            QPushButton:pressed {
+                background-color: #2A2A2A;
+            }
+            QMenuBar {
+                background-color: #2E2E2E;
+            }
+            QMenuBar::item:selected {
+                background-color: #4E4E4E;
+            }
+            """
+            self.setStyleSheet(dark_stylesheet)
+            app_state.night_mode = True
+        else:
+            # Apply day mode (reset stylesheet)
+            self.setStyleSheet("")
+            app_state.night_mode = False
 
     def confirm_quit(self):
         """Show a confirmation dialog before quitting."""
@@ -1206,6 +1340,11 @@ class MainWindow(QMainWindow):
         self.file_opened = app_state.file_opened
         app_state.button_params = app_state.button_params
         app_state.acc_buffer = app_state.acc_buffer
+        app_state.language = app_state.language
+        app_state.night_mode = app_state.night_mode
+        self.change_language(app_state.language)
+        self.night_mode_action.setChecked(app_state.night_mode)
+        self.toggle_night_mode()
         self.parcel_field.update_field(self.width, self.height, self.gap_x, self.gap_y, self.count_x, self.count_y)
         self.restore_state()
         
@@ -1240,6 +1379,7 @@ class MainWindow(QMainWindow):
         # Initialize second window with saved state
         self.second_window.initialize_with_parcels(sorted_parcel_dict)
         self.second_window.initialize_params(app_state)
+        load_translations(QApplication.instance())  # Reapply the translation to the app
 
         main_window_geometry = self.geometry()
         self.second_window.setGeometry(main_window_geometry)
@@ -1265,6 +1405,26 @@ class MainWindow(QMainWindow):
         # Restore the parcel colors and positions
         self.parcel_field.restore_parcels_with_colors(app_state.colored_parcels)
 
+    def change_language(self, language):
+        # Load the appropriate language file
+        translator = QTranslator()
+        if language == 'en':
+            translator.load(per_resource_path("translated_en.qm"))
+            self.lang_action_en.setChecked(True)
+            self.lang_action_es.setChecked(False)
+            app_state.language = "en"
+        elif language == 'es':
+            translator.load(per_resource_path("translated_es.qm"))
+            self.lang_action_es.setChecked(True)
+            self.lang_action_en.setChecked(False)
+            app_state.language = "es"
+        
+        # Reapply the translator to the app
+        QApplication.instance().installTranslator(translator)
+
+        # Retranslate the UI
+        self.retranslateUi()  # Assuming you have this function implemented
+
     def closeEvent(self, event):
         """Override the closeEvent to show the confirmation dialog when clicking the window close button."""
         user_choice = self.confirm_quit()
@@ -1285,6 +1445,7 @@ if __name__ == "__main__":
     logger.info("Starting parcel_main")
     hide_console()
     app = QApplication(sys.argv)
+    load_translations(app)
     icon_path = "C:\\Users\\Getac\\Documents\\Omer Mersin\\codes\\parcel_planner\\DRONETOOLS.ico"
     app_icon = QIcon(icon_path)
     app.setWindowIcon(app_icon)

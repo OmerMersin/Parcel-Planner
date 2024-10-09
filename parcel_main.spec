@@ -9,6 +9,7 @@ a = Analysis(
         ('map.html', 'map.html'),
         ('map_tiles/no_tile_found.png','no_tile_found.png'),
         ('web_resources', 'web_resources'),
+        ('translated_es.qm', '.')
     ],
     hiddenimports=[],
     hookspath=[],
