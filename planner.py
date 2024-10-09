@@ -664,18 +664,19 @@ class PlannerMainWindow(QMainWindow):
         self.calculated_speed_label.setText(self.tr("Calculated Ground Speed: 0 km/h"))
         self.total_length_label.setText(self.tr("Total Path Length: 0 meters"))
         
+        try:
+            self.width_label.setText(self.tr("Parcel Width: {0} meters").format(self.width))
+            self.height_label.setText(self.tr("Parcel Height: {0} meters").format(self.height))
+            self.gap_x_layout.setText(self.tr("Gap X: {0} meters").format(self.gap_x))
+            self.gap_y_layout.setText(self.tr("Gap Y: {0} meters").format(self.gap_y))
 
-        self.width_label.setText(self.tr("Parcel Width: {0} meters").format(self.width))
-        self.height_label.setText(self.tr("Parcel Height: {0} meters").format(self.height))
-        self.gap_x_layout.setText(self.tr("Gap X: {0} meters").format(self.gap_x))
-        self.gap_y_layout.setText(self.tr("Gap Y: {0} meters").format(self.gap_y))
+            total_width = self.width * self.count_x + (self.count_x - 1) * self.gap_x
+            total_height = self.height * self.count_y + (self.count_y - 1) * self.gap_y
 
-        total_width = self.width * self.count_x + (self.count_x - 1) * self.gap_x
-        total_height = self.height * self.count_y + (self.count_y - 1) * self.gap_y
-
-        self.total_width.setText(self.tr("Total Width: {0} meters").format(total_width))
-        self.total_height.setText(self.tr("Total Height: {0} meters").format(total_height))
-
+            self.total_width.setText(self.tr("Total Width: {0} meters").format(total_width))
+            self.total_height.setText(self.tr("Total Height: {0} meters").format(total_height))
+        except:
+            pass
 
 
     def open_file(self):
@@ -911,16 +912,16 @@ class PlannerMainWindow(QMainWindow):
         self.button_params = {int(key): value for key, value in app_state.button_params.items()}
         self.acc_buffer = app_state.acc_buffer
         
+        self.width_label.setText(self.tr("Parcel Width: {0} meters").format(self.width))
+        self.height_label.setText(self.tr("Parcel Height: {0} meters").format(self.height))
+        self.gap_x_layout.setText(self.tr("Gap X: {0} meters").format(self.gap_x))
+        self.gap_y_layout.setText(self.tr("Gap Y: {0} meters").format(self.gap_y))
 
-        self.width_label.setText(f"Parcel Width: {self.width} meters")
-        self.height_label.setText(f"Parcel Height: {self.height} meters")
-        self.gap_x_layout.setText(f"Gap X: {self.gap_x} meters")
-        self.gap_y_layout.setText(f"Gap Y: {self.gap_y} meters")
-        total_width = self.width * self.count_x + (self.count_x-1) * self.gap_x
-        total_height = self.height * self.count_y + (self.count_y-1) * self.gap_y
-        self.total_width.setText(f"Total Width: {total_width} meters")
-        self.total_height.setText(f"Total Height: {total_height} meters")
+        total_width = self.width * self.count_x + (self.count_x - 1) * self.gap_x
+        total_height = self.height * self.count_y + (self.count_y - 1) * self.gap_y
 
+        self.total_width.setText(self.tr("Total Width: {0} meters").format(total_width))
+        self.total_height.setText(self.tr("Total Height: {0} meters").format(total_height))
 
 
         self.application_dose_input.blockSignals(True)
@@ -1430,7 +1431,6 @@ class PlannerMainWindow(QMainWindow):
             self.show_warning(self.tr("Saving Failed!"), self.tr("Please check the input fields and try again."))
             return
         
-        self.retranslateUi()
 
         js_code = "var parcels = [];\n"  # Initialize the parcels array
         for i, parcel_info in enumerate(self.parcel_coordinates):
@@ -1479,6 +1479,7 @@ class PlannerMainWindow(QMainWindow):
             # self.map_widget.view.page().runJavaScript(js_code)
 
         self.map_widget.generate_parcels(self.parcel_coordinates, center_lat, center_lon, zoom_level)
+        self.change_language(app_state.language)
 
     def window(self, window):
         logger.debug(f"window defined for the value of: {window}")
@@ -1534,9 +1535,9 @@ class PlannerMainWindow(QMainWindow):
         logger.debug(f"showing warning with the value of: {title, content}")
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Icon.Warning)
-        msg.setText(title)
+        msg.setText(self.tr(title))
         msg.setInformativeText(content)
-        msg.setWindowTitle("Warning")
+        msg.setWindowTitle(self.tr("Warning"))
         msg.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
         msg.setDefaultButton(QMessageBox.StandardButton.Cancel)
         ret = msg.exec()
@@ -1552,7 +1553,7 @@ class PlannerMainWindow(QMainWindow):
         msg.setIcon(QMessageBox.Icon.Information)  # Set the icon to Information
         msg.setText(title)
         msg.setInformativeText(content)
-        msg.setWindowTitle("Information")  # Set the title to "Information"
+        msg.setWindowTitle(self.tr("Information"))  # Set the title to "Information"
         msg.setStandardButtons(QMessageBox.StandardButton.Ok)  # Only show the OK button
         msg.setDefaultButton(QMessageBox.StandardButton.Ok)  # Set OK as the default button
         ret = msg.exec()

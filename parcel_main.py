@@ -513,13 +513,13 @@ class ParcelField(QWidget):
         logger.debug(f"showing warning with the value of: {title, content}")
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Icon.Warning)
-        msg.setText(title)
+        msg.setText(self.tr(title))
         msg.setInformativeText(content)
-        msg.setWindowTitle("Warning")
+        msg.setWindowTitle(self.tr("Warning"))
 
         # Add custom buttons for the specific action (Skip and Stay)
-        skip_button = msg.addButton("Continue Next Page", QMessageBox.ButtonRole.AcceptRole)
-        stay_button = msg.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
+        skip_button = msg.addButton(self.tr("Continue Next Page"), QMessageBox.ButtonRole.AcceptRole)
+        stay_button = msg.addButton(self.tr("Cancel"), QMessageBox.ButtonRole.RejectRole)
         
         msg.setDefaultButton(stay_button)  # Set "Stay" as the default button
 
@@ -535,9 +535,9 @@ class ParcelField(QWidget):
         logger.debug(f"showing warning with the value of: {title, content}")
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Icon.Warning)
-        msg.setText(title)
-        msg.setInformativeText(content)
-        msg.setWindowTitle("Warning")
+        msg.setText(self.tr(title))  # Use self.tr for title translation
+        msg.setInformativeText(self.tr(content))  # Use self.tr for content translation
+        msg.setWindowTitle(self.tr("Warning"))  # Title for the window
 
         # Add custom buttons for the specific action (Apply and Cancel)
         apply_button = msg.addButton(self.tr("Apply"), QMessageBox.ButtonRole.AcceptRole)
@@ -552,6 +552,7 @@ class ParcelField(QWidget):
             return "Apply"
         else:
             return "Cancel"
+
 
     
     def hex_to_color_name(self, hex_code):
@@ -930,13 +931,12 @@ class MainWindow(QMainWindow):
         self.clear_button.setText(self.tr("Clear Parcels"))
         self.plan_button.setText(self.tr("Planning Window"))
 
-        # Update QMessageBox for warnings and information
-        # self.confirm_quit_msg.setWindowTitle(self.tr("Confirm Quit"))
-        # self.confirm_quit_msg.setText(self.tr("Do you want to quit without saving?"))
-        # self.confirm_quit_msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel)
-        # self.confirm_quit_msg.button(QMessageBox.StandardButton.Yes).setText(self.tr("Yes"))
-        # self.confirm_quit_msg.button(QMessageBox.StandardButton.No).setText(self.tr("No"))
-        # self.confirm_quit_msg.button(QMessageBox.StandardButton.Cancel).setText(self.tr("Cancel"))
+         # Update warning messages
+        self.tr("Duplicate Color")
+        self.tr("{0} Do you want to apply this color?")
+        self.tr("Color '{0}' is used {1} times, which exceeds the number of columns ({2}).\n")
+        self.tr("Do you want to proceed anyway?")
+        self.tr("Rows {0} have empty (white) parcels.\n")
 
     def toggle_night_mode(self):
         """Toggles between day and night mode stylesheets."""
@@ -1165,20 +1165,26 @@ class MainWindow(QMainWindow):
                 print("User clicked OK")
 
     def show_warning(self, title, content):
-            logger.debug(f"showing warning with the value of: {title, content}")
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Icon.Warning)
-            msg.setText(title)
-            msg.setInformativeText(content)
-            msg.setWindowTitle("Warning")
-            msg.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
-            msg.setDefaultButton(QMessageBox.StandardButton.Cancel)
-            ret = msg.exec()
-            
-            if ret == QMessageBox.StandardButton.Ok:
-                print("User clicked OK")
-            else:
-                print("User clicked Cancel or closed the dialog")
+        logger.debug(f"showing warning with the value of: {title, content}")
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Icon.Warning)
+        msg.setText(self.tr(title))  # Use self.tr for title translation
+        msg.setInformativeText(self.tr(content))  # Use self.tr for content translation
+        msg.setWindowTitle(self.tr("Warning"))  # Title for the window
+
+        # Add custom buttons for the specific action (Skip and Stay)
+        skip_button = msg.addButton(self.tr("Continue Next Page"), QMessageBox.ButtonRole.AcceptRole)
+        stay_button = msg.addButton(self.tr("Cancel"), QMessageBox.ButtonRole.RejectRole)
+        
+        msg.setDefaultButton(stay_button)  # Set "Stay" as the default button
+
+        msg.exec()
+
+        # Return "Apply" or "Cancel" depending on what button was clicked
+        if msg.clickedButton() == skip_button:
+            return "Skip"
+        else:
+            return "Cancel"
 
     def update_layout(self):
         logger.debug("layout updating")
