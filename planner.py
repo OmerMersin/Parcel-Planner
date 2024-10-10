@@ -63,9 +63,9 @@ class PlannerMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         logger.debug("PlannerMainWindow initialized")
-
+        self.translator = QTranslator()
         self.setWindowTitle("Parcel Planner")
-
+        self.translator = QTranslator()
         self.colored_parcels = {}
         self.parcel_js_references = []
         self.parcel_marker_js_references = []
@@ -356,7 +356,7 @@ class PlannerMainWindow(QMainWindow):
         self.map_widget.view.page().runJavaScript(js_code)
 
         # Update the spraying width from the input
-        self.spraying_width = self.spraying_width_input.text()
+        # self.spraying_width = self.spraying_width_input.text()
 
 
     def calculate_velocity(self):
@@ -549,24 +549,28 @@ class PlannerMainWindow(QMainWindow):
         self.lang_action_en.setChecked(True)
 
     def change_language(self, language):
+        # Remove the old translator if any
+        if self.translator is not None:
+            QApplication.instance().removeTranslator(self.translator)
         # Load the appropriate language file
-        translator = QTranslator()
         if language == 'en':
-            translator.load(temp_resource_path("translated_en.qm"))
+            self.translator.load(resource_path("translated_en.qm"))
             self.lang_action_en.setChecked(True)
             self.lang_action_es.setChecked(False)
-            app_state.language = "en"
         elif language == 'es':
-            translator.load(temp_resource_path("translated_es.qm"))
+            self.translator.load(resource_path("translated_es.qm"))
             self.lang_action_es.setChecked(True)
             self.lang_action_en.setChecked(False)
-            app_state.language = "es"
         
-        # Reapply the translator to the app
-        QApplication.instance().installTranslator(translator)
-
-        # Retranslate the UI
-        self.retranslateUi()  # Assuming you have this function implemented
+        # Install the translator
+        QApplication.instance().installTranslator(self.translator)
+        
+        # Retranslate the UI elements
+        self.retranslateUi()
+        app_state.language = language
+        # Save settings
+        self.save_settings_to_config(language, self.night_mode_action.isChecked())
+        print("current language,", language)
 
     def toggle_night_mode(self):
         """Toggles between day and night mode stylesheets."""
@@ -895,8 +899,10 @@ class PlannerMainWindow(QMainWindow):
         self.colored_parcels = colored_parcels
         self.color_codes_list = list(self.colored_parcels.values())
 
-    def initialize_params(self, app_state):
+    def initialize_params(self, app_state, tr):
         logger.debug(f"initializing with the params of: {app_state}")
+        print(app_state.count_x)
+        self.translator = tr
         self.width = app_state.width
         self.height = app_state.height
         self.gap_x = app_state.gap_x
@@ -922,6 +928,13 @@ class PlannerMainWindow(QMainWindow):
 
         self.total_width.setText(self.tr("Total Width: {0} meters").format(total_width))
         self.total_height.setText(self.tr("Total Height: {0} meters").format(total_height))
+
+        # Then set the language and night mode
+        app_state.language = app_state.language
+        app_state.night_mode = app_state.night_mode
+        self.change_language(app_state.language)
+        self.night_mode_action.setChecked(app_state.night_mode)
+        self.toggle_night_mode()
 
 
         self.application_dose_input.blockSignals(True)
@@ -1001,17 +1014,15 @@ class PlannerMainWindow(QMainWindow):
         self.spraying_width_input.setText(str(app_state.spraying_width))
         self.fit.setChecked(app_state.fit)
 
-        self.generate_mission.setText(f"Save Mission")
+        self.generate_mission.setText(self.tr("Save Mission"))
         self.generate_mission.setStyleSheet(f"background-color: None; color: black;")
         self.load_coordinates_from_config()
         self.clear_parcels()
 
-        self.change_language(app_state.language)
-        self.night_mode_action.setChecked(app_state.night_mode)
-        self.toggle_night_mode()
-
         if app_state.file_opened:
             self.save()
+
+        print(2, self.count_x)
 
     def load_button_params(self, button_widget):
         """
@@ -1488,20 +1499,20 @@ class PlannerMainWindow(QMainWindow):
     def back(self):
         logger.debug("directing to the main window")
         # When coming back to the main window, save the state again
-        # try:
-        #     app_state.save_state(
-        #         self.button_names,
-        #         self.width,
-        #         self.height,
-        #         self.gap_x,
-        #         self.gap_y,
-        #         self.count_x,
-        #         self.count_y,
-        #         self.colored_parcels
-        #     )
-        # except:
-        #     from parcel_main import MainWindow
-        #     self.main_window = MainWindow()
+        try:
+            app_state.save_state(
+                self.button_names,
+                self.width,
+                self.height,
+                self.gap_x,
+                self.gap_y,
+                self.count_x,
+                self.count_y,
+                self.colored_parcels
+            )
+        except:
+            from parcel_main import MainWindow
+            self.main_window = MainWindow()
         
         try:
             if not self.main_window:
@@ -2153,13 +2164,21 @@ class PlannerMainWindow(QMainWindow):
         if user_choice == "save_and_quit":
             self.map_widget.save_map_coordinates()  # Save the map coordinates
             self.save_config()
+            self.save_settings_to_config(self.get_current_language(), self.night_mode_action.isChecked())
             event.accept()  # Close the window
         elif user_choice == "quit_without_saving":
             self.map_widget.save_map_coordinates()
-            self.save_config()
+            self.save_settings_to_config(self.get_current_language(), self.night_mode_action.isChecked())
             event.accept()  # Close the window without saving
         else:
             event.ignore()  # Cancel the close event
+
+    def get_current_language(self):
+        if self.lang_action_en.isChecked():
+            return 'en'
+        elif self.lang_action_es.isChecked():
+            return 'es'
+        return 'en'  # Default to English if none is selected
 
     def load_coordinates_from_config(self):
         config = configparser.ConfigParser()
@@ -2211,6 +2230,17 @@ class PlannerMainWindow(QMainWindow):
             'd-lon': str(float(self.bot_right_lon_input.text())),
             'zoom': str(18)
         }
+        with open(self.config_file, 'w') as configfile:
+            config.write(configfile)
+
+    def save_settings_to_config(self, language, night_mode):
+        config = configparser.ConfigParser()
+        if os.path.exists(self.config_file):
+            config.read(self.config_file)
+        if 'Settings' not in config:
+            config['Settings'] = {}
+        config['Settings']['language'] = language
+        config['Settings']['night_mode'] = str(night_mode)
         with open(self.config_file, 'w') as configfile:
             config.write(configfile)
 

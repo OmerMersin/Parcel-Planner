@@ -9,9 +9,10 @@ import logging
 from logging.handlers import RotatingFileHandler
 import os
 import json
+import configparser
 
 
-# Night mode, spanish support, run without consol
+# Changing button name in main then changing monitor forward and back will cause numbers of parcels to change
 
 from PyQt6.QtCore import QTranslator, QLocale
 
@@ -681,6 +682,7 @@ class MainWindow(QMainWindow):
         logger.debug("MainWindow initialized")
 
         self.setWindowTitle("Parcel Planner")
+        self.translator = QTranslator()
         self.map_view = QWebEngineView()
         self.map_view.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
         self.map_view.setUrl(QUrl("http://localhost:8000/map.html"))
@@ -849,6 +851,53 @@ class MainWindow(QMainWindow):
         # self.parcel_field.update_field(3, 5, 0.3, 1, 6, 5)
         self.restore_state()
 
+        self.config_file = resource_path("config.ini")
+        language, night_mode = self.load_settings_from_config()
+
+        # Set the default checked language
+        if language == 'en':
+            self.lang_action_en.setChecked(True)
+            self.lang_action_es.setChecked(False)
+        elif language == 'es':
+            self.lang_action_en.setChecked(False)
+            self.lang_action_es.setChecked(True)
+        else:
+            self.lang_action_en.setChecked(True)
+            self.lang_action_es.setChecked(False)
+
+        # Apply the language
+        self.change_language(language)
+
+        # Set night mode
+        self.night_mode_action.setChecked(night_mode)
+        if night_mode:
+            self.toggle_night_mode()
+        else:
+            self.toggle_night_mode()
+
+    def load_settings_from_config(self):
+        config = configparser.ConfigParser()
+        if os.path.exists(self.config_file):
+            config.read(self.config_file)
+            if 'Settings' in config:
+                settings = config['Settings']
+                language = settings.get('language', 'en')
+                night_mode = settings.getboolean('night_mode', False)
+                return language, night_mode
+        return 'en', False  # Default values if not set
+
+    def save_settings_to_config(self, language, night_mode):
+        config = configparser.ConfigParser()
+        if os.path.exists(self.config_file):
+            config.read(self.config_file)
+        if 'Settings' not in config:
+            config['Settings'] = {}
+        config['Settings']['language'] = language
+        config['Settings']['night_mode'] = str(night_mode)
+        with open(self.config_file, 'w') as configfile:
+            config.write(configfile)
+
+
     def resizeEvent(self, event):
         self.update_layout()
         super().resizeEvent(event)
@@ -974,6 +1023,14 @@ class MainWindow(QMainWindow):
             # Apply day mode (reset stylesheet)
             self.setStyleSheet("")
             app_state.night_mode = False
+        self.save_settings_to_config(self.get_current_language(), self.night_mode_action.isChecked())
+    
+    def get_current_language(self):
+        if self.lang_action_en.isChecked():
+            return 'en'
+        elif self.lang_action_es.isChecked():
+            return 'es'
+        return 'en'  # Default to English if none is selected
 
     def confirm_quit(self):
         """Show a confirmation dialog before quitting."""
@@ -1318,6 +1375,7 @@ class MainWindow(QMainWindow):
 
     def initialize_params(self, app_state):
         logger.debug(f"initializing with the params: {app_state}")
+        print(app_state.count_x)
         self.width = app_state.width
         self.height = app_state.height
         self.gap_x = app_state.gap_x
@@ -1384,7 +1442,7 @@ class MainWindow(QMainWindow):
         )
         # Initialize second window with saved state
         self.second_window.initialize_with_parcels(sorted_parcel_dict)
-        self.second_window.initialize_params(app_state)
+        self.second_window.initialize_params(app_state, self.translator)
         load_translations(QApplication.instance())  # Reapply the translation to the app
 
         main_window_geometry = self.geometry()
@@ -1412,24 +1470,27 @@ class MainWindow(QMainWindow):
         self.parcel_field.restore_parcels_with_colors(app_state.colored_parcels)
 
     def change_language(self, language):
+        # Remove the old translator if any
+        if self.translator is not None:
+            QApplication.instance().removeTranslator(self.translator)
         # Load the appropriate language file
-        translator = QTranslator()
         if language == 'en':
-            translator.load(per_resource_path("translated_en.qm"))
+            self.translator.load(per_resource_path("translated_en.qm"))
             self.lang_action_en.setChecked(True)
             self.lang_action_es.setChecked(False)
-            app_state.language = "en"
         elif language == 'es':
-            translator.load(per_resource_path("translated_es.qm"))
+            self.translator.load(per_resource_path("translated_es.qm"))
             self.lang_action_es.setChecked(True)
             self.lang_action_en.setChecked(False)
-            app_state.language = "es"
         
-        # Reapply the translator to the app
-        QApplication.instance().installTranslator(translator)
-
-        # Retranslate the UI
-        self.retranslateUi()  # Assuming you have this function implemented
+        # Install the translator
+        QApplication.instance().installTranslator(self.translator)
+        
+        # Retranslate the UI elements
+        self.retranslateUi()
+        app_state.language = language
+        # Save settings
+        self.save_settings_to_config(language, self.night_mode_action.isChecked())
 
     def closeEvent(self, event):
         """Override the closeEvent to show the confirmation dialog when clicking the window close button."""
