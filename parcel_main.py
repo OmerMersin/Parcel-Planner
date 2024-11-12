@@ -424,7 +424,7 @@ class ParcelField(QWidget):
                 self.parcel_colors[parcel_id] = (color, x, y)
 
     def on_parcel_click(self, event):
-        logger.debug("A parcel clicked")
+        logger.debug(self.tr("A parcel clicked"))
         parcel = self.scene.itemAt(event.scenePos(), self.view.transform())
 
         if isinstance(parcel, QGraphicsRectItem):
@@ -438,75 +438,66 @@ class ParcelField(QWidget):
                     row_number = parcel_id // self.count_x  # Calculate row
                     user_choice = None  # Initialize user_choice to avoid UnboundLocalError
 
-                    # Calculate the IDs of the directly above and below parcels (if they exist)
-                    above_parcel_id = parcel_id - self.count_x if row_number > 0 else None
-                    below_parcel_id = parcel_id + self.count_x if row_number < self.count_y - 1 else None
-
-                    # Check if the parcel above or below has the same color as the current one
+                    # Initialize warning message
                     warning_message = ""
 
-                    # Check the color of the parcel directly above (if it exists)
-                    if above_parcel_id is not None and above_parcel_id in self.parcel_colors:
-                        above_parcel_color = self.parcel_colors[above_parcel_id][0]
-                        if above_parcel_color == self.current_color.name():
-                            warning_message += "The parcel directly above this one has the same color.\n"
+                    # Check for the same color in the entire column
+                    for row in range(self.count_y):
+                        check_parcel_id = row * self.count_x + column_number
+                        if check_parcel_id in self.parcel_colors:
+                            check_parcel_color = self.parcel_colors[check_parcel_id][0]
+                            if check_parcel_color == self.current_color.name():
+                                warning_message += self.tr("Another parcel in the same column has the same color.\n")
+                                break  # Exit loop once a match is found
 
-                    # Check the color of the parcel directly below (if it exists)
-                    if below_parcel_id is not None and below_parcel_id in self.parcel_colors:
-                        below_parcel_color = self.parcel_colors[below_parcel_id][0]
-                        if below_parcel_color == self.current_color.name():
-                            warning_message += "The parcel directly below this one has the same color.\n"
-
-                    # If either warning condition was triggered, ask the user
+                    # If the warning condition is triggered, ask the user
                     if warning_message:
                         user_choice = self.show_warning_rep(
                             self.tr("Duplicate Color"),
                             self.tr("{0} Do you want to apply this color?").format(warning_message)
                         )
                         # If the user clicks "Cancel", return without applying the color
-                        if user_choice == "Cancel":
+                        if user_choice == self.tr("Cancel"):
                             return  # Exit without applying the color
 
-                    # Save the previous color in case we need to revert
-                    previous_color = self.parcel_colors.get(parcel_id, ("white", parcel.rect().x(), parcel.rect().y()))[0]
-                    self.parcel_colors[parcel_id] = (self.current_color.name(), parcel.rect().x(), parcel.rect().y())
-                    parcel.setBrush(QBrush(self.current_color))
-
-                    # If the user cancels, revert to the previous color
-                    if user_choice == "Cancel":
-                        self.parcel_colors[parcel_id] = (previous_color, parcel.rect().x(), parcel.rect().y())
-                        parcel.setBrush(QBrush(QColor(previous_color)))
-
-                # Left-click changes the parcel's color to the currently selected color
-                if event.button() == Qt.MouseButton.LeftButton:
-                    # Check if the current color has already been used count_x times
+                    # Check if the current color has already been used `count_x` times (the column count)
                     color_usage_count = sum(
                         1 for color_data in self.parcel_colors.values()
                         if color_data[0] == self.current_color.name()
                     )
-                    
-                    if color_usage_count > self.count_x:
+
+                    if color_usage_count >= self.count_x:
+                        # Notify the user about the usage count and ask if they want to exceed it
                         user_choice = self.show_warning_rep(
                             self.tr("Color Usage Limit Reached"),
                             self.tr(
-                                "The color '{0}' has already been used {1} times, which exceeds the maximum allowed ({2}).\nDo you still want to apply this color?"
+                                "The color '{0}' has been used {1} times, which is as much as the column number ({2}).\nDo you want to exceed this limit?"
                             ).format(self.hex_to_color_name(self.current_color.name()), color_usage_count, self.count_x)
                         )
-                        if user_choice == "Cancel":
+                        if user_choice == self.tr("Cancel"):
                             return  # Prevent applying the color
-                        # If user clicks "Apply", proceed to apply the color
 
+                    # Save the previous color in case we need to revert
+                    previous_color = self.parcel_colors.get(parcel_id, (self.tr("white"), parcel.rect().x(), parcel.rect().y()))[0]
+                    
                     # Apply the color
                     self.parcel_colors[parcel_id] = (self.current_color.name(), parcel.rect().x(), parcel.rect().y())
                     parcel.setBrush(QBrush(self.current_color))
+
+                    # If the user cancels, revert to the previous color (though this should never reach here as we handle cancel above)
+                    if user_choice == self.tr("Cancel"):
+                        self.parcel_colors[parcel_id] = (previous_color, parcel.rect().x(), parcel.rect().y())
+                        parcel.setBrush(QBrush(QColor(previous_color)))
 
                 # Right-click resets the parcel's color to white
                 elif event.button() == Qt.MouseButton.RightButton:
                     if parcel_id in self.parcel_colors:
                         del self.parcel_colors[parcel_id]
-                    parcel.setBrush(QBrush(QColor("white")))
+                    parcel.setBrush(QBrush(QColor(self.tr("white"))))
 
         event.accept()
+
+
 
 
 

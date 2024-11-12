@@ -268,7 +268,7 @@ class PlannerMainWindow(QMainWindow):
         form_layout.addRow(self.set_acc, self.set_acc_input)
 
 
-        self.calculated_speed_label = QLabel(self.tr("Calculated Ground Speed: 0 km/h"))
+        self.calculated_speed_label = QLabel(self.tr("Calculated Ground Speed: 0 km/h - 0 m/s"))
         form_layout.addRow(self.calculated_speed_label)
 
 
@@ -476,7 +476,7 @@ class PlannerMainWindow(QMainWindow):
         # print(f"Ground speed (ground_speed_km_h): {ground_speed_km_h:.3f} km/h")
 
         # Update the label or store the calculated values as needed
-        self.calculated_speed_label.setText(f"Calculated Ground Speed: {ground_speed_km_h:.2f} km/h")
+        self.calculated_speed_label.setText(f"Calculated Ground Speed: {ground_speed_km_h:.2f} km/h - {ground_speed_m_s:.2f} m/s")
 
         app_state.application_dose = self.application_dose_input.text()
         app_state.nozzle_number = self.nozzle_number_input.text()
@@ -554,11 +554,11 @@ class PlannerMainWindow(QMainWindow):
             QApplication.instance().removeTranslator(self.translator)
         # Load the appropriate language file
         if language == 'en':
-            self.translator.load(resource_path("translated_en.qm"))
+            self.translator.load(temp_resource_path("translated_en.qm"))
             self.lang_action_en.setChecked(True)
             self.lang_action_es.setChecked(False)
         elif language == 'es':
-            self.translator.load(resource_path("translated_es.qm"))
+            self.translator.load(temp_resource_path("translated_es.qm"))
             self.lang_action_es.setChecked(True)
             self.lang_action_en.setChecked(False)
         
@@ -665,7 +665,7 @@ class PlannerMainWindow(QMainWindow):
         self.set_acc.setText(self.tr("Acceleration Buffer (meters)"))
 
         # Update calculated values
-        self.calculated_speed_label.setText(self.tr("Calculated Ground Speed: 0 km/h"))
+        self.calculated_speed_label.setText(self.tr("Calculated Ground Speed: 0 km/h - 0 m/s"))
         self.total_length_label.setText(self.tr("Total Path Length: 0 meters"))
         
         try:
@@ -1154,6 +1154,7 @@ class PlannerMainWindow(QMainWindow):
                     report_lines.append(f"    Nozzle Rate: {params.get('nozzle_rate', 'N/A')}\n")
                     report_lines.append(f"    Nozzle Number: {params.get('nozzle_number', 'N/A')}\n")
                     report_lines.append(f"    Altitude: {params.get('altitude', 'N/A')}\n")
+                    report_lines.append(f"    {self.calculated_speed_label.text()}\n")
                 else:
                     report_lines.append(f"  Parameters: Not available\n")
 
