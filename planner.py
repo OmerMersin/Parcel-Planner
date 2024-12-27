@@ -1,5 +1,5 @@
 import sys
-from PyQt6.QtWidgets import QApplication, QMainWindow, QHBoxLayout, QWidget, QSplitter, QLabel, QLineEdit, QFormLayout, QPushButton, QGridLayout, QSizePolicy, QRadioButton, QMessageBox, QToolBar, QFileDialog
+from PyQt6.QtWidgets import QApplication, QMainWindow, QHBoxLayout, QWidget, QSplitter, QLabel, QLineEdit, QFormLayout, QPushButton, QGridLayout, QSizePolicy, QRadioButton, QMessageBox, QToolBar, QFileDialog, QCheckBox
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QIcon, QAction
 import math
@@ -13,6 +13,9 @@ import logging
 import json
 from main import MapWidget
 from PyQt6.QtCore import QTranslator, QLocale
+
+sys.stdout.reconfigure(encoding='utf-8')
+
 # Carry only appstate between windows V
 # Fix to create mission with original paths for spray on and off V
 # RESTORE APP STATE DOESNT PROTECT THE PARAMS OF THE LAST BUTTON V
@@ -169,9 +172,13 @@ class PlannerMainWindow(QMainWindow):
         self.spraying_width_input.textChanged.connect(self.update_spray_width)
         form_layout.addRow(self.spraying_width, self.spraying_width_input)
 
-        self.fit = QRadioButton()
-        self.fit.setText(self.tr("Do you want parcels to fit the area?"))
+        self.fit = QCheckBox()
+        self.fit.setText(self.tr("Fit parcels to the area?"))
         form_layout.addRow(self.fit)
+
+        self.fit_gap = QCheckBox()
+        self.fit_gap.setText(self.tr("Preserve parcel size?"))
+        form_layout.addRow(self.fit_gap)
 
 
         self.save_button = QPushButton(self.tr("Process"))
@@ -304,10 +311,14 @@ class PlannerMainWindow(QMainWindow):
         self.color_to_button_map = {widget.color_hex: widget.button_name for widget in self.color_button_widgets}
         
         self.config_file = resource_path("config.ini")
+        print(self.config_file)
         self.load_coordinates_from_config()
 
         container = QWidget()
         main_layout = QHBoxLayout(container)
+        # Remove padding and spacing
+        main_layout.setContentsMargins(0, 0, 0, 0)  # Set all margins (left, top, right, bottom) to 0
+        main_layout.setSpacing(0)  # Set spacing between widgets to 0
         main_layout.addWidget(splitter)
         self.setCentralWidget(container)
         # self.showMaximized()
@@ -316,6 +327,7 @@ class PlannerMainWindow(QMainWindow):
         self.paths_by_color.clear()
         try:
             self.acc_buffer = float(self.set_acc_input.text())
+            self.generate_path()
             if self.acc_buffer == "" or self.acc_buffer <= 0:
                 raise Exception
         except Exception:
@@ -669,16 +681,25 @@ class PlannerMainWindow(QMainWindow):
         self.total_length_label.setText(self.tr("Total Path Length: 0 meters"))
         
         try:
-            self.width_label.setText(self.tr("Parcel Width: {0} meters").format(self.width))
-            self.height_label.setText(self.tr("Parcel Height: {0} meters").format(self.height))
+            is_fit = self.fit.isChecked()
+            if is_fit:
+                self.width_label.setText(self.tr("Parcel Width: {0:.2f} meters (≈ {1})").format(self.exact_width, self._width))
+                self.height_label.setText(self.tr("Parcel Height: {0:.2f} meters (≈ {1})").format(self.exact_height, self._height))
+
+                self.total_width.setText(self.tr("Total Width: {0:.2f} meters").format(self.fit_total_width))
+                self.total_height.setText(self.tr("Total Height: {0:.2f} meters").format(self.fit_total_height))
+            else:
+                self.width_label.setText(self.tr("Parcel Width: {0:.2f} meters").format(self._width))
+                self.height_label.setText(self.tr("Parcel Height: {0:.2f} meters").format(self._width))
+
+                total_width = self.width * self.count_x + (self.count_x - 1) * self.gap_x
+                total_height = self.height * self.count_y + (self.count_y - 1) * self.gap_y
+            
+                self.total_width.setText(self.tr("Total Width: {0:.2f} meters").format(total_width))
+                self.total_height.setText(self.tr("Total Height: {0:.2f} meters").format(total_height))
+
             self.gap_x_layout.setText(self.tr("Gap X: {0} meters").format(self.gap_x))
             self.gap_y_layout.setText(self.tr("Gap Y: {0} meters").format(self.gap_y))
-
-            total_width = self.width * self.count_x + (self.count_x - 1) * self.gap_x
-            total_height = self.height * self.count_y + (self.count_y - 1) * self.gap_y
-
-            self.total_width.setText(self.tr("Total Width: {0} meters").format(total_width))
-            self.total_height.setText(self.tr("Total Height: {0} meters").format(total_height))
         except:
             pass
 
@@ -1365,6 +1386,8 @@ class PlannerMainWindow(QMainWindow):
         
         is_fit = self.fit.isChecked()
         app_state.fit = is_fit
+        is_preserved = self.fit_gap.isChecked()
+        print(is_fit)
         if is_fit:
             # Calculate the distance between the corners (top-left and top-right for width, top-left and bottom-left for height)
             top_left = (t_l_lat, t_l_lon)
@@ -1389,59 +1412,76 @@ class PlannerMainWindow(QMainWindow):
                 
                 return R * c * 1000  # Return distance in meters
 
-            total_width = haversine(t_l_lat, t_l_lon, t_r_lat, t_r_lon)  # Distance between top-left and top-right corners
-            total_height = haversine(t_l_lat, t_l_lon, b_l_lat, b_l_lon)  # Distance between top-left and bottom-left corners
+            self.fit_total_width = haversine(t_l_lat, t_l_lon, t_r_lat, t_r_lon)  # Distance between top-left and top-right corners
+            self.fit_total_height = haversine(t_l_lat, t_l_lon, b_l_lat, b_l_lon)  # Distance between top-left and bottom-left corners
 
             # Calculate the new parcel width, height, gap_x, and gap_y based on the total area and the number of parcels
-            self.exact_width = total_width / self.count_x  # Adjust width to fit within the area
-            self.exact_height = total_height / self.count_y  # Adjust height to fit within the area
-            self.width = round(self.exact_width)
-            self.height = round(self.exact_height)
+            self.exact_width = self.fit_total_width / self.count_x  # Adjust width to fit within the area
+            self.exact_height = self.fit_total_height / self.count_y  # Adjust height to fit within the area
+            self._width = round(self.exact_width)
+            self._height = round(self.exact_height)
+            print(self._width)
 
             # Update the labels with the fitted dimensions using self.tr
-            self.width_label.setText(self.tr("Parcel Width: {0:.2f} meters (≈ {1})").format(self.exact_width, self.width))
-            self.height_label.setText(self.tr("Parcel Height: {0:.2f} meters (≈ {1})").format(self.exact_height, self.height))
+            self.width_label.setText(self.tr("Parcel Width: {0:.2f} meters (≈ {1})").format(self.exact_width, self._width))
+            self.height_label.setText(self.tr("Parcel Height: {0:.2f} meters (≈ {1})").format(self.exact_height, self._height))
             self.gap_x_layout.setText(self.tr("Gap X: {0:.2f} meters").format(self.gap_x))
             self.gap_y_layout.setText(self.tr("Gap Y: {0:.2f} meters").format(self.gap_y))
-            self.total_width.setText(self.tr("Total Width: {0:.2f} meters").format(total_width))
-            self.total_height.setText(self.tr("Total Height: {0:.2f} meters").format(total_height))
-
-            
+            self.total_width.setText(self.tr("Total Width: {0:.2f} meters").format(self.fit_total_width))
+            self.total_height.setText(self.tr("Total Height: {0:.2f} meters").format(self.fit_total_height))
         else:
             try:
                 total_width = self.width * self.count_x + (self.count_x - 1) * self.gap_x
                 total_height = self.height * self.count_y + (self.count_y - 1) * self.gap_y
+                self._width = self.width
+                self._height = self.height
 
                 # Update the labels with the fitted dimensions using self.tr
-                self.width_label.setText(self.tr("Parcel Width: {0:.2f} meters").format(self.width))
-                self.height_label.setText(self.tr("Parcel Height: {0:.2f} meters").format(self.height))
+                self.width_label.setText(self.tr("Parcel Width: {0:.2f} meters").format(self._width))
+                self.height_label.setText(self.tr("Parcel Height: {0:.2f} meters").format(self._width))
                 self.gap_x_layout.setText(self.tr("Gap X: {0:.2f} meters").format(self.gap_x))
                 self.gap_y_layout.setText(self.tr("Gap Y: {0:.2f} meters").format(self.gap_y))
                 self.total_width.setText(self.tr("Total Width: {0:.2f} meters").format(total_width))
                 self.total_height.setText(self.tr("Total Height: {0:.2f} meters").format(total_height))
             except:
-                self.width = app_state.width
-                self.height = app_state.height
+                self._width = app_state.width
+                self._height = app_state.height
                 self.gap_x = app_state.gap_x
                 self.gap_y = app_state.gap_y
                 self.count_x = app_state.count_x
                 self.count_y = app_state.count_y
-                total_width = self.width * self.count_x + (self.count_x - 1) * self.gap_x
-                total_height = self.height * self.count_y + (self.count_y - 1) * self.gap_y
+                total_width = self._width * self.count_x + (self.count_x - 1) * self.gap_x
+                total_height = self._height * self.count_y + (self.count_y - 1) * self.gap_y
 
                 # Update the labels with the fitted dimensions using self.tr
-                self.width_label.setText(self.tr("Parcel Width: {0:.2f} meters").format(self.width))
-                self.height_label.setText(self.tr("Parcel Height: {0:.2f} meters").format(self.height))
+                self.width_label.setText(self.tr("Parcel Width: {0:.2f} meters").format(self._width))
+                self.height_label.setText(self.tr("Parcel Height: {0:.2f} meters").format(self._height))
                 self.gap_x_layout.setText(self.tr("Gap X: {0:.2f} meters").format(self.gap_x))
                 self.gap_y_layout.setText(self.tr("Gap Y: {0:.2f} meters").format(self.gap_y))
                 self.total_width.setText(self.tr("Total Width: {0:.2f} meters").format(total_width))
                 self.total_height.setText(self.tr("Total Height: {0:.2f} meters").format(total_height))
-        try:
-            generator = ParcelGenerator(area_corners, self.width, self.height, self.gap_x, self.gap_y, self.count_x, self.count_y, is_fit, self.color_codes_list)
-            self.parcel_coordinates = (generator.generate_parcel_coordinates())
-        except:
-            self.show_warning(self.tr("Saving Failed!"), self.tr("Please check the input fields and try again."))
-            return
+        print(self.width_label.text())
+
+        # Create the generator and retrieve updated gap_x/gap_y
+        generator, new_gaps = ParcelGenerator.create(
+            area_corners,
+            self._width,
+            self._height,
+            self.gap_x,
+            self.gap_y,
+            self.count_x,
+            self.count_y,
+            is_fit,
+            is_preserved,
+            self.color_codes_list
+        )
+
+        # new_gaps is the (gap_x, gap_y) after scaling
+        self.gap_x, self.gap_y = new_gaps
+
+        # Generate parcels
+        self.parcel_coordinates = generator.generate_parcel_coordinates()
+
         
 
         js_code = "var parcels = [];\n"  # Initialize the parcels array
@@ -2244,6 +2284,10 @@ class PlannerMainWindow(QMainWindow):
         config['Settings']['night_mode'] = str(night_mode)
         with open(self.config_file, 'w') as configfile:
             config.write(configfile)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.setWindowState(Qt.WindowState.WindowMaximized)  # Ensure the window is in maximized state
 
 
 if __name__ == "__main__":

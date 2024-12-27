@@ -10,6 +10,9 @@ from logging.handlers import RotatingFileHandler
 import os
 import json
 import configparser
+from PyQt6.QtGui import QScreen
+
+sys.stdout.reconfigure(encoding='utf-8')
 
 
 # Changing button name in main then changing monitor forward and back will cause numbers of parcels to change
@@ -211,6 +214,7 @@ class ColorButtonWidget(QWidget):
         self.color_clicked.emit(self.color_name)
 
     def eventFilter(self, obj, event):
+        self.update_text_color("white")
         if obj == self.button and event.type() == QEvent.Type.MouseButtonPress:
             if event.button() == Qt.MouseButton.RightButton:  # Detect right-click
                 # Switch to editable mode on right-click
@@ -235,6 +239,29 @@ class ColorButtonWidget(QWidget):
         self.button_named.emit(self.button_names)
         self.button_name = button_widget.text_background_label.text()
 
+    def update_text_color(self, mode):
+        """Update the text color of the button and editable area based on the mode."""
+        text_color = "white" if mode == "dark" else "black"
+        
+        # Update the QPushButton text color
+        self.text_background_label.setStyleSheet(
+            f"""
+            background-color: white;  /* White background behind text */
+            padding: 3px;
+            border-radius: 5px;
+            color: {text_color};  /* Update text color */
+            """
+        )
+        
+        # Update the QLineEdit text color
+        self.editable_area.setStyleSheet(
+            f"""
+            background-color: {self.color_hex};  /* Retain button color */
+            color: {text_color};  /* Update text color */
+            """
+        )
+
+
 
 class ParcelField(QWidget):
     def __init__(self):
@@ -254,6 +281,7 @@ class ParcelField(QWidget):
         self.parcel_colors = {}  # Dictionary to store parcel color mappings
         self.parcel_identifiers = {}  # Initialize the dictionary for parcel identifiers
         self.color_buttons = [] 
+        self.corner_labels = {}  # Dictionary to store references to corner labels
 
 
     def update_field(self, width, height, gap_x, gap_y, count_x, count_y, structure_changed=False):
@@ -341,7 +369,7 @@ class ParcelField(QWidget):
 
     def add_label_to_corner(self, text, x, y):
         """Helper function to add a label with a circle at a given position."""
-        logger.debug(f"adding label {text} at position ({x}, {y})")
+        logger.debug(f"Adding label {text} at position ({x}, {y})")
         
         # Draw a small circle
         circle_radius = 10
@@ -362,6 +390,10 @@ class ParcelField(QWidget):
         label.setDefaultTextColor(Qt.GlobalColor.black)
         self.scene.addItem(label)
 
+        # Store the label in the corner_labels dictionary
+        self.corner_labels[text] = label
+
+
 
     def add_axis_labels(self, total_width, total_height, scale_factor, offset_x, offset_y):
         logger.debug(f"adding axis labels with the value of: {total_width, total_height, scale_factor, offset_x, offset_y}")
@@ -371,12 +403,14 @@ class ParcelField(QWidget):
         x_label = QGraphicsTextItem(self.tr("Total X: {0}m").format(total_width))
         y_label = QGraphicsTextItem(self.tr("Total Y: {0}m").format(total_height))
 
-
         x_label.setPos(offset_x + displayed_width / 2 - x_label.boundingRect().width() / 2, self.total_height - self.margin + 5)
         y_label.setPos(self.margin - y_label.boundingRect().width() - 5, offset_y + displayed_height / 2 - y_label.boundingRect().height() / 2)
 
         self.scene.addItem(x_label)
         self.scene.addItem(y_label)
+
+        if app_state.night_mode:
+            self.update_text_item_colors("white")
 
     def set_current_color(self, button_widget, color):
         if isinstance(color, QColor):
@@ -496,10 +530,6 @@ class ParcelField(QWidget):
                     parcel.setBrush(QBrush(QColor(self.tr("white"))))
 
         event.accept()
-
-
-
-
 
     def show_warning(self, title, content):
         logger.debug(f"showing warning with the value of: {title, content}")
@@ -650,7 +680,18 @@ class ParcelField(QWidget):
                 parcel.setBrush(QBrush(QColor("white")))
                 self.parcel_colors[parcel_id] = ("white", parcel.rect().x(), parcel.rect().y())
 
-                
+    def update_text_item_colors(self, color):
+        """Update the text color of all QGraphicsTextItem elements in the scene."""
+        for item in self.scene.items():
+            if isinstance(item, QGraphicsTextItem):
+                item.setDefaultTextColor(QColor(color))
+
+    def update_corner_label_colors(self, color):
+        """Update the text color of corner labels."""
+        for label in self.corner_labels.values():
+            label.setDefaultTextColor(QColor(color))
+
+            
 
 import ctypes
 # Define Windows API function to get the console window handle
@@ -742,6 +783,7 @@ class MainWindow(QMainWindow):
         gap_y_layout.addWidget(self.meter_label)  # Add QLabel to the layout
 
         self.empty_label = QLabel("           ")
+        self.empty_label.setStyleSheet("background-color: transparent;")  # Make transparent
         count_x_layout = QHBoxLayout()
         self.count_x_label = QLabel(self.tr("Parcels on X axis:"))
         self.count_x_input = QLineEdit("6")
@@ -753,6 +795,7 @@ class MainWindow(QMainWindow):
         count_x_layout.addWidget(self.empty_label)
 
         self.empty_label = QLabel("           ")
+        self.empty_label.setStyleSheet("background-color: transparent;")  # Make transparent
         count_y_layout = QHBoxLayout()
         self.count_y_label = QLabel(self.tr("Parcels on Y axis:"))
         self.count_y_input = QLineEdit("5")
@@ -865,6 +908,10 @@ class MainWindow(QMainWindow):
             self.toggle_night_mode()
         else:
             self.toggle_night_mode()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.setWindowState(Qt.WindowState.WindowMaximized)  # Ensure the window is in maximized state
 
     def load_settings_from_config(self):
         config = configparser.ConfigParser()
@@ -987,8 +1034,8 @@ class MainWindow(QMainWindow):
                 background-color: #2E2E2E;
                 color: white;
             }
-            QLabel, QLineEdit, QPushButton, QToolBar, QMenuBar, QStatusBar, QMessageBox, QGraphicsView, QGraphicsRectItem, QGraphicsTextItem {
-                background-color: #3A3A3A;
+            QLabel, QLineEdit, QPushButton, QToolBar, QMenuBar, QStatusBar, QMessageBox, QGraphicsView, QGraphicsRectItem {
+                background-color: transparent;
                 color: white;
             }
             QLineEdit {
@@ -997,6 +1044,7 @@ class MainWindow(QMainWindow):
             QPushButton {
                 background-color: #3A3A3A;
                 border: 1px solid #555555;
+                padding: 3px;
             }
             QPushButton:pressed {
                 background-color: #2A2A2A;
@@ -1010,11 +1058,17 @@ class MainWindow(QMainWindow):
             """
             self.setStyleSheet(dark_stylesheet)
             app_state.night_mode = True
+            self.parcel_field.update_text_item_colors("white")
+            self.parcel_field.update_corner_label_colors("black")  # Update corner labels
         else:
             # Apply day mode (reset stylesheet)
             self.setStyleSheet("")
             app_state.night_mode = False
+            self.parcel_field.update_text_item_colors("black")
+            self.parcel_field.update_corner_label_colors("black")  # Update corner labels
         self.save_settings_to_config(self.get_current_language(), self.night_mode_action.isChecked())
+
+
     
     def get_current_language(self):
         if self.lang_action_en.isChecked():
