@@ -79,9 +79,18 @@ class ParcelGenerator:
 
     def _fit_parcels(self):
         """
-        Internal method: If self.is_fit is True, adjust parcel dimensions
-        and/or gaps to fit them into the area.
+        Internal method:
+          1) If is_fit=False: No scaling at all.
+          2) If is_fit=True and preserve_parcel_size=False: 
+             Scale both parcels and gaps to fit area.
+          3) If is_fit=True and preserve_parcel_size=True:
+             Keep parcel size the same, scale only gaps.
         """
+
+        # If not fitting to the area, do nothing.
+        if not self.is_fit:
+            return
+
         # Calculate the width/height of the bounding area
         top_left, top_right, bottom_right, bottom_left = [np.array(coord) for coord in self.area_corners]
         area_width_m = self.haversine_distance(top_left, top_right)
@@ -97,59 +106,47 @@ class ParcelGenerator:
             - (self.gap_y_m if self.gap_y_m != 0 else 0)
         )
 
-        if self.is_fit:
-            # CASE 1: preserve_parcel_size = True
-            if self.preserve_parcel_size:
-                # Only scale the gap to fit
-                if total_parcel_width > 0:
-                    scale_x = area_width_m / total_parcel_width
-                else:
-                    scale_x = 1.0
+        # If these are 0 or extremely small, avoid division by zero
+        if abs(total_parcel_width) < 1e-12:
+            total_parcel_width = 1e-12
+        if abs(total_parcel_height) < 1e-12:
+            total_parcel_height = 1e-12
 
-                if total_parcel_height > 0:
-                    scale_y = area_height_m / total_parcel_height
-                else:
-                    scale_y = 1.0
+        if self.preserve_parcel_size:
+            # Only scale the gap to fit
+            scale_x = area_width_m / total_parcel_width
+            scale_y = area_height_m / total_parcel_height
 
-                # This factor ensures the entire arrangement fits
-                scale_factor = min(scale_x, scale_y)
-                
-                # Apply scaling only to the gaps
-                if self.gap_x_m != 0:
-                    self.gap_x_m *= scale_factor
-                if self.gap_y_m != 0:
-                    self.gap_y_m *= scale_factor
+            # This factor ensures the entire arrangement fits
+            scale_factor = min(scale_x, scale_y)
+            
+            # Apply scaling only to the gaps
+            if abs(self.gap_x_m) > 1e-12:
+                self.gap_x_m *= scale_factor
+            if abs(self.gap_y_m) > 1e-12:
+                self.gap_y_m *= scale_factor
 
-            # CASE 2: preserve_parcel_size = False
-            else:
-                # Scale parcels and gaps together
-                if total_parcel_width > 0:
-                    scale_x = area_width_m / total_parcel_width
-                else:
-                    scale_x = 1.0
+        else:
+            # Scale parcels and gaps together
+            scale_x = area_width_m / total_parcel_width
+            scale_y = area_height_m / total_parcel_height
+            scale_factor = min(scale_x, scale_y)
 
-                if total_parcel_height > 0:
-                    scale_y = area_height_m / total_parcel_height
-                else:
-                    scale_y = 1.0
-
-                scale_factor = min(scale_x, scale_y)
-
-                # Scale parcel dimensions
-                self.parcel_width_m *= scale_factor
-                self.parcel_height_m *= scale_factor
-                
-                # Scale gap if non-zero
-                if self.gap_x_m != 0:
-                    self.gap_x_m *= scale_factor
-                if self.gap_y_m != 0:
-                    self.gap_y_m *= scale_factor
+            # Scale parcel dimensions
+            self.parcel_width_m *= scale_factor
+            self.parcel_height_m *= scale_factor
+            
+            # Scale gap if non-zero
+            if abs(self.gap_x_m) > 1e-12:
+                self.gap_x_m *= scale_factor
+            if abs(self.gap_y_m) > 1e-12:
+                self.gap_y_m *= scale_factor
 
         # If gaps were initially zero (or extremely close to zero), ensure they stay zero
         if abs(self.gap_x_m) < 1e-12:
-            self.gap_x_m = 0
+            self.gap_x_m = 0.0
         if abs(self.gap_y_m) < 1e-12:
-            self.gap_y_m = 0
+            self.gap_y_m = 0.0
 
     def haversine_distance(self, coord1, coord2):
         """Calculate the great-circle distance between two points on the Earth's surface in meters."""
@@ -217,7 +214,7 @@ class ParcelGenerator:
                     parcel_origin_lat, parcel_origin_lng, self.parcel_height_m, bearing_y
                 )
 
-                # Assign color in a cycle (just as an example)
+                # Assign color in a cycle through the colors list
                 color = self.colors[(j * self.num_parcels_x + i) % len(self.colors)]
 
                 # Store the parcel data

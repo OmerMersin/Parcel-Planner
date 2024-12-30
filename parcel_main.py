@@ -1,7 +1,7 @@
 import sys
-from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QVBoxLayout, QHBoxLayout, QWidget, QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsTextItem, QSplitter, QFormLayout, QPushButton, QGridLayout, QSizePolicy, QMessageBox, QGraphicsEllipseItem, QToolBar, QFileDialog
-from PyQt6.QtCore import Qt, QUrl, QEvent, pyqtSignal, QSystemSemaphore, QSharedMemory 
-from PyQt6.QtGui import QBrush, QColor, QIcon, QAction
+from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QVBoxLayout, QHBoxLayout, QWidget, QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsTextItem, QSplitter, QFormLayout, QPushButton, QGridLayout, QSizePolicy, QMessageBox, QGraphicsEllipseItem, QFileDialog
+from PyQt6.QtCore import Qt, QUrl, QEvent, pyqtSignal, QSystemSemaphore, QSharedMemory, QThread
+from PyQt6.QtGui import QBrush, QColor, QIcon, QAction, QPixmap, QRegion, QPainterPath
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineSettings
 import time
@@ -10,14 +10,29 @@ from logging.handlers import RotatingFileHandler
 import os
 import json
 import configparser
-from PyQt6.QtGui import QScreen
+from PyQt6.QtCore import QTranslator, QLocale
+
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-
 # Changing button name in main then changing monitor forward and back will cause numbers of parcels to change
+# Improve InitializationThread
 
-from PyQt6.QtCore import QTranslator, QLocale
+class InitializationThread(QThread):
+    initialization_done = pyqtSignal()  # Signal to indicate that initialization is complete
+
+    def run(self):
+        """
+        Perform all initialization tasks here.
+        This runs in a separate thread to avoid blocking the UI.
+        """
+        log_file_path = os.path.join(os.path.dirname(__file__), "app.log")
+        sys.stdout = open(log_file_path, "w")
+        sys.stderr = open(log_file_path, "w")
+        
+        time.sleep(3)  # Simulate initialization delay (replace with actual tasks)
+        self.initialization_done.emit()
+
 
 def load_translations(app):
     translator = QTranslator()
@@ -34,9 +49,6 @@ def load_translations(app):
     translator.load(translation_file)
     app.installTranslator(translator)
 
-log_file_path = os.path.join(os.path.dirname(__file__), "app.log")
-sys.stdout = open(log_file_path, "w")
-sys.stderr = open(log_file_path, "w")
 
 def resource_path(relative_path):
     """ Get absolute path to resource, works for development and for PyInstaller """
@@ -107,6 +119,7 @@ class AppState:
         self.location = [[37.32500, -6.02884], [37.32490, -6.02861], [37.32466, -6.02899], [37.32427,-6.02829]]
         self.spraying_width = 1.5
         self.fit = False
+        self.fit_gap = False
         self.paths_by_color = {}
         self.application_dose = 300
         self.nozzle_rate = 0.8
@@ -133,6 +146,41 @@ class AppState:
 
 
 app_state = AppState() 
+
+class SplashScreen(QWidget):
+    def __init__(self, pixmap):
+        super().__init__()
+
+        # Set window flags and attributes for a frameless, topmost, translucent window
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+
+        # Set up a QLabel to hold the pixmap
+        label = QLabel(self)
+        label.setPixmap(pixmap)
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Use a QVBoxLayout to center the label
+        layout = QVBoxLayout(self)
+        layout.addWidget(label)
+        layout.setContentsMargins(0, 0, 0, 0)  # Remove margins
+
+        # Set the size of the widget to the size of the pixmap
+        self.resize(pixmap.width(), pixmap.height())
+
+        # Apply rounded corners to the window using a painter path
+        self._apply_rounded_mask(pixmap.width(), pixmap.height(), radius=20)
+
+    def _apply_rounded_mask(self, width, height, radius):
+        """
+        Creates and applies a rounded mask to the widget using a QPainterPath.
+        """
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, width, height, radius, radius)  # Add a rounded rectangle
+
+        # Convert QPainterPath to QRegion for setting the mask
+        region = QRegion(path.toFillPolygon().toPolygon())
+        self.setMask(region)
 
 class ColorButtonWidget(QWidget):
     color_clicked = pyqtSignal(str)
@@ -871,7 +919,7 @@ class MainWindow(QMainWindow):
         main_layout = QHBoxLayout(container)
         main_layout.addWidget(splitter)
         self.setCentralWidget(container)
-        self.showMaximized()
+        # self.showMaximized()
 
         self.width_input.textChanged.connect(self.update_layout)
         self.height_input.textChanged.connect(self.update_layout)
@@ -1150,6 +1198,7 @@ class MainWindow(QMainWindow):
             app_state.location = data["location"]
             app_state.spraying_width = data["spraying_width"]
             app_state.fit = data["fit"]
+            app_state.fit_gap = data["fit_gap"]
             app_state.button_params = data["params"]
             app_state.acc_buffer = data["acc_buffer"]
 
@@ -1236,6 +1285,7 @@ class MainWindow(QMainWindow):
                 "location": app_state.location,
                 "spraying_width": app_state.spraying_width,
                 "fit": app_state.fit,
+                "fit_gap": app_state.fit_gap,
                 'parcel_coordinates': app_state.parcel_coordinates,
                 'paths_by_color': app_state.paths_by_color,
                 'params': app_state.button_params,
@@ -1446,6 +1496,7 @@ class MainWindow(QMainWindow):
         app_state.location = app_state.location
         app_state.spraying_width = app_state.spraying_width
         app_state.fit = app_state.fit
+        app_state.fit = app_state.fit_gap
         self.file_opened = app_state.file_opened
         app_state.button_params = app_state.button_params
         app_state.acc_buffer = app_state.acc_buffer
@@ -1554,10 +1605,9 @@ class MainWindow(QMainWindow):
             event.ignore()  # Cancel the close event
 
 if __name__ == "__main__":
-    logger.info("Starting parcel_main")
-    hide_console()
     app = QApplication(sys.argv)
-    load_translations(app)
+
+    # Set application icon
     icon_path = "C:\\Users\\Getac\\Documents\\Omer Mersin\\codes\\parcel_planner\\DRONETOOLS.ico"
     app_icon = QIcon(icon_path)
     app.setWindowIcon(app_icon)
@@ -1565,13 +1615,23 @@ if __name__ == "__main__":
     # Ensure single instance
     semaphore = QSystemSemaphore('MyUniqueAppSemaphore', 1)
     semaphore.acquire()
-    
     shared_memory = QSharedMemory('MyUniqueAppSharedMemory')
     if not shared_memory.create(1):
         print("Another instance is already running.")
-        sys.exit(app.exec())
-    
-    window = MainWindow()
-    window.show()
+        sys.exit(0)
+
+    # Load and resize the image
+    pixmap = QPixmap("splash4.png")
+    resized_pixmap = pixmap.scaled(600, 400, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+
+    # Create and display the custom splash screen
+    splash = SplashScreen(resized_pixmap)
+    splash.show()
+
+    # Initialize the application in the background
+    initialization_thread = InitializationThread()
+    initialization_thread.initialization_done.connect(lambda: splash.close())  # Close splash when done
+    initialization_thread.initialization_done.connect(lambda: MainWindow().show())  # Show main window when done
+    initialization_thread.start()
 
     sys.exit(app.exec())
