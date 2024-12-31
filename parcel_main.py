@@ -11,12 +11,17 @@ import os
 import json
 import configparser
 from PyQt6.QtCore import QTranslator, QLocale
-
-
-sys.stdout.reconfigure(encoding='utf-8')
+if getattr(sys, 'frozen', False):
+    import pyi_splash
 
 # Changing button name in main then changing monitor forward and back will cause numbers of parcels to change
 # Improve InitializationThread
+
+sys.stdout.reconfigure(encoding='utf-8')
+
+log_file_path = os.path.join(os.path.dirname(__file__), "app.log")
+sys.stdout = open(log_file_path, "w")
+sys.stderr = open(log_file_path, "w")
 
 class InitializationThread(QThread):
     initialization_done = pyqtSignal()  # Signal to indicate that initialization is complete
@@ -26,10 +31,6 @@ class InitializationThread(QThread):
         Perform all initialization tasks here.
         This runs in a separate thread to avoid blocking the UI.
         """
-        log_file_path = os.path.join(os.path.dirname(__file__), "app.log")
-        sys.stdout = open(log_file_path, "w")
-        sys.stderr = open(log_file_path, "w")
-        
         time.sleep(3)  # Simulate initialization delay (replace with actual tasks)
         self.initialization_done.emit()
 
@@ -76,7 +77,11 @@ def per_resource_path(relative_path):
 log_file_name = f"{time.strftime('%Y-%m-%d_%H-%M-%S')}.txt"
 log_file_path = os.path.join(resource_path('logs'), log_file_name)
 translation_file = per_resource_path('translated_es.qm')
-print(f"Loading translation file: {translation_file}")
+# print(f"Loading translation file: {translation_file}")
+
+icon_path = per_resource_path('DRONETOOLS.ico')
+splash_path = per_resource_path('splash4.png')
+
 
 def create_logger():
     logs_dir = resource_path('logs')
@@ -772,7 +777,6 @@ class MainWindow(QMainWindow):
         self.file_opened = False
         self.prev_count_x = None
         self.prev_count_y = None
-        icon_path = "C:\\Users\\Getac\\Documents\\Omer Mersin\\codes\\parcel_planner\\DRONETOOLS.ico"
         app_icon = QIcon(icon_path)
         self.setWindowIcon(app_icon)
 
@@ -1608,7 +1612,6 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
 
     # Set application icon
-    icon_path = "C:\\Users\\Getac\\Documents\\Omer Mersin\\codes\\parcel_planner\\DRONETOOLS.ico"
     app_icon = QIcon(icon_path)
     app.setWindowIcon(app_icon)
 
@@ -1621,7 +1624,7 @@ if __name__ == "__main__":
         sys.exit(0)
 
     # Load and resize the image
-    pixmap = QPixmap("splash4.png")
+    pixmap = QPixmap(splash_path)
     resized_pixmap = pixmap.scaled(600, 400, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
 
     # Create and display the custom splash screen
@@ -1630,7 +1633,7 @@ if __name__ == "__main__":
 
     # Initialize the application in the background
     initialization_thread = InitializationThread()
-    initialization_thread.initialization_done.connect(lambda: splash.close())  # Close splash when done
+    initialization_thread.initialization_done.connect(lambda: pyi_splash.close())  # Close splash when done        
     initialization_thread.initialization_done.connect(lambda: MainWindow().show())  # Show main window when done
     initialization_thread.start()
 
