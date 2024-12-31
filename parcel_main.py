@@ -17,11 +17,11 @@ if getattr(sys, 'frozen', False):
 # Changing button name in main then changing monitor forward and back will cause numbers of parcels to change
 # Improve InitializationThread
 
-sys.stdout.reconfigure(encoding='utf-8')
+# sys.stdout.reconfigure(encoding='utf-8')
 
 log_file_path = os.path.join(os.path.dirname(__file__), "app.log")
-sys.stdout = open(log_file_path, "w")
-sys.stderr = open(log_file_path, "w")
+sys.stdout = open(log_file_path, "w", encoding="utf-8")
+sys.stderr = open(log_file_path, "w", encoding="utf-8")
 
 # class InitializationThread(QThread):
 #     initialization_done = pyqtSignal()  # Signal to indicate that initialization is complete
