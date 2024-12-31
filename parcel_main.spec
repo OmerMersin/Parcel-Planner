@@ -23,11 +23,11 @@ a = Analysis(
 
 pyz = PYZ(a.pure)
 
-splash = Splash('splash4.png',
+splash = Splash('splash5.png',
                 binaries=a.binaries,
                 datas=a.datas,
                 text_pos=(10, 50),
-                text_size=12,
+                text_size=8,
                 text_color='black')
 
 exe = EXE(

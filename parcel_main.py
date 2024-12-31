@@ -23,16 +23,16 @@ log_file_path = os.path.join(os.path.dirname(__file__), "app.log")
 sys.stdout = open(log_file_path, "w")
 sys.stderr = open(log_file_path, "w")
 
-class InitializationThread(QThread):
-    initialization_done = pyqtSignal()  # Signal to indicate that initialization is complete
+# class InitializationThread(QThread):
+#     initialization_done = pyqtSignal()  # Signal to indicate that initialization is complete
 
-    def run(self):
-        """
-        Perform all initialization tasks here.
-        This runs in a separate thread to avoid blocking the UI.
-        """
-        time.sleep(3)  # Simulate initialization delay (replace with actual tasks)
-        self.initialization_done.emit()
+#     def run(self):
+#         """
+#         Perform all initialization tasks here.
+#         This runs in a separate thread to avoid blocking the UI.
+#         """
+#         time.sleep(3)  # Simulate initialization delay (replace with actual tasks)
+#         self.initialization_done.emit()
 
 
 def load_translations(app):
@@ -80,8 +80,7 @@ translation_file = per_resource_path('translated_es.qm')
 # print(f"Loading translation file: {translation_file}")
 
 icon_path = per_resource_path('DRONETOOLS.ico')
-splash_path = per_resource_path('splash4.png')
-
+# splash_path = per_resource_path('splash5.png')
 
 def create_logger():
     logs_dir = resource_path('logs')
@@ -1623,18 +1622,23 @@ if __name__ == "__main__":
         print("Another instance is already running.")
         sys.exit(0)
 
-    # Load and resize the image
-    pixmap = QPixmap(splash_path)
-    resized_pixmap = pixmap.scaled(600, 400, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+    # # Load and resize the image
+    # pixmap = QPixmap(splash_path)
+    # resized_pixmap = pixmap.scaled(600, 400, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
 
-    # Create and display the custom splash screen
-    splash = SplashScreen(resized_pixmap)
-    splash.show()
+    # # Create and display the custom splash screen
+    # splash = SplashScreen(resized_pixmap)
+    # splash.show()
 
-    # Initialize the application in the background
-    initialization_thread = InitializationThread()
-    initialization_thread.initialization_done.connect(lambda: pyi_splash.close())  # Close splash when done        
-    initialization_thread.initialization_done.connect(lambda: MainWindow().show())  # Show main window when done
-    initialization_thread.start()
+    # # Initialize the application in the background
+    # initialization_thread = InitializationThread()
+    # initialization_thread.initialization_done.connect(lambda: splash.close())  # Close splash when done
+    # initialization_thread.initialization_done.connect(lambda: MainWindow().show())  # Show main window when done
+    # initialization_thread.start()
+
+    if getattr(sys, 'frozen', False):
+        pyi_splash.close()
+
+    MainWindow().show()
 
     sys.exit(app.exec())
