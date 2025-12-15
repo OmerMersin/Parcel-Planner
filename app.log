@@ -1,0 +1,77 @@
+Loading translation file: C:\Users\PC1\Developer\Parcel-Planner\Parcel-Planner\translated_es.qm
+Config file found at: C:\Users\PC1\Developer\Parcel-Planner\venv\Scripts\config.ini
+Starting tile server on port 8000
+Config sections: ['Settings', 'Map', 'Location']
+Loaded from config: lat=37.324816421147375, lon=-6.028887033462525, zoom=20
+Config file found at: C:\Users\PC1\Developer\Parcel-Planner\venv\Scripts\config.ini
+Config sections: ['Settings', 'Map', 'Location']
+6
+current language, en
+Config file found at: C:\Users\PC1\Developer\Parcel-Planner\venv\Scripts\config.ini
+Config sections: ['Settings', 'Map', 'Location']
+2 6
+User clicked Cancel or closed the dialog
+User clicked OK
+current language, en
+User clicked OK
+User clicked OK
+Saving coordinates: lat=37.32482921867795, lon=-6.028925925493241, zoom=20
+126682/101735.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:18] "GET /tiles/18/126681/101739.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:18] "GET /tiles/18/126682/101739.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:18] "GET /tiles/18/126680/101735.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:18] "GET /tiles/18/126683/101735.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:19] "GET /tiles/18/126679/101737.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:19] "GET /tiles/18/126684/101737.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:19] "GET /tiles/18/126680/101739.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:19] "GET /tiles/18/126683/101739.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:19] "GET /tiles/18/126679/101736.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:19] "GET /tiles/18/126684/101736.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:19] "GET /tiles/18/126679/101738.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:19] "GET /tiles/18/126684/101738.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:19] "GET /tiles/18/126679/101735.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:19] "GET /tiles/18/126684/101735.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:19] "GET /tiles/18/126679/101739.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:19] "GET /tiles/18/126684/101739.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:19] "GET /tiles/18/126682/101737.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:19] "GET /tiles/18/126681/101736.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:19] "GET /tiles/18/126682/101736.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:19] "GET /tiles/18/126681/101738.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:19] "GET /tiles/18/126682/101738.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:24] "GET /tiles/19/253362/203475.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:24] "GET /tiles/19/253365/203475.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:24] "GET /tiles/19/253362/203474.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:24] "GET /tiles/20/506728/406950.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:24] "GET /tiles/20/506728/406951.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:24] "GET /tiles/20/506726/406950.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:24] "GET /tiles/20/506725/406950.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:24] "GET /tiles/20/506727/406948.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:24] "GET /tiles/20/506726/406949.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:24] "GET /tiles/20/506727/406949.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:24] "GET /tiles/20/506726/406951.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:24] "GET /tiles/20/506728/406949.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:24] "GET /tiles/20/506729/406950.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:24] "GET /tiles/20/506727/406952.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:24] "GET /tiles/20/506727/406951.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:24] "GET /tiles/20/506726/406948.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:24] "GET /tiles/20/506728/406948.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:24] "GET /tiles/20/506725/406949.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:25] "GET /tiles/20/506729/406949.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:25] "GET /tiles/20/506725/406951.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:25] "GET /tiles/20/506729/406951.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:25] "GET /tiles/20/506726/406952.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:25] "GET /tiles/20/506728/406952.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:25] "GET /tiles/20/506725/406948.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:25] "GET /tiles/20/506729/406948.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:25] "GET /tiles/20/506725/406952.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:25] "GET /tiles/20/506729/406952.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:25] "GET /tiles/20/506724/406950.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:25] "GET /tiles/20/506730/406950.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:25] "GET /tiles/20/506724/406949.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:25] "GET /tiles/20/506730/406949.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:25] "GET /tiles/20/506724/406951.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:25] "GET /tiles/20/506730/406951.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:25] "GET /tiles/20/506724/406948.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:25] "GET /tiles/20/506730/406948.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:25] "GET /tiles/20/506724/406952.png HTTP/1.1" 200 -
+127.0.0.1 - - [15/Dec/2025 13:01:26] "GET /tiles/20/506730/406952.png HTTP/1.1" 200 -

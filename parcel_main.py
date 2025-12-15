@@ -1,7 +1,7 @@
 import sys
-from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QVBoxLayout, QHBoxLayout, QWidget, QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsTextItem, QSplitter, QFormLayout, QPushButton, QGridLayout, QSizePolicy, QMessageBox, QGraphicsEllipseItem, QToolBar, QFileDialog
-from PyQt6.QtCore import Qt, QUrl, QEvent, pyqtSignal, QSystemSemaphore, QSharedMemory 
-from PyQt6.QtGui import QBrush, QColor, QIcon, QAction
+from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QVBoxLayout, QHBoxLayout, QWidget, QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsTextItem, QSplitter, QFormLayout, QPushButton, QGridLayout, QSizePolicy, QMessageBox, QGraphicsEllipseItem, QFileDialog
+from PyQt6.QtCore import Qt, QUrl, QEvent, pyqtSignal, QSystemSemaphore, QSharedMemory, QThread
+from PyQt6.QtGui import QBrush, QColor, QIcon, QAction, QPixmap, QRegion, QPainterPath
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineSettings
 import time
@@ -10,11 +10,30 @@ from logging.handlers import RotatingFileHandler
 import os
 import json
 import configparser
-
+from PyQt6.QtCore import QTranslator, QLocale
+if getattr(sys, 'frozen', False):
+    import pyi_splash
 
 # Changing button name in main then changing monitor forward and back will cause numbers of parcels to change
+# Improve InitializationThread
 
-from PyQt6.QtCore import QTranslator, QLocale
+# sys.stdout.reconfigure(encoding='utf-8')
+
+log_file_path = os.path.join(os.path.dirname(__file__), "app.log")
+sys.stdout = open(log_file_path, "w", encoding="utf-8")
+sys.stderr = open(log_file_path, "w", encoding="utf-8")
+
+# class InitializationThread(QThread):
+#     initialization_done = pyqtSignal()  # Signal to indicate that initialization is complete
+
+#     def run(self):
+#         """
+#         Perform all initialization tasks here.
+#         This runs in a separate thread to avoid blocking the UI.
+#         """
+#         time.sleep(3)  # Simulate initialization delay (replace with actual tasks)
+#         self.initialization_done.emit()
+
 
 def load_translations(app):
     translator = QTranslator()
@@ -31,9 +50,6 @@ def load_translations(app):
     translator.load(translation_file)
     app.installTranslator(translator)
 
-log_file_path = os.path.join(os.path.dirname(__file__), "app.log")
-sys.stdout = open(log_file_path, "w")
-sys.stderr = open(log_file_path, "w")
 
 def resource_path(relative_path):
     """ Get absolute path to resource, works for development and for PyInstaller """
@@ -61,7 +77,10 @@ def per_resource_path(relative_path):
 log_file_name = f"{time.strftime('%Y-%m-%d_%H-%M-%S')}.txt"
 log_file_path = os.path.join(resource_path('logs'), log_file_name)
 translation_file = per_resource_path('translated_es.qm')
-print(f"Loading translation file: {translation_file}")
+# print(f"Loading translation file: {translation_file}")
+
+icon_path = per_resource_path('DRONETOOLS.ico')
+# splash_path = per_resource_path('splash5.png')
 
 def create_logger():
     logs_dir = resource_path('logs')
@@ -104,6 +123,7 @@ class AppState:
         self.location = [[37.32500, -6.02884], [37.32490, -6.02861], [37.32466, -6.02899], [37.32427,-6.02829]]
         self.spraying_width = 1.5
         self.fit = False
+        self.fit_gap = False
         self.paths_by_color = {}
         self.application_dose = 300
         self.nozzle_rate = 0.8
@@ -115,6 +135,10 @@ class AppState:
         self.file_opened = False
         self.language = "en" 
         self.night_mode = False
+        self.original_width = 3.0
+        self.original_height = 5.0
+        self.original_gap_x = 0.3
+        self.original_gap_y = 1.0
 
     
     def save_state(self, button_names, width, height, gap_x, gap_y, count_x, count_y, colored_parcels):
@@ -130,6 +154,41 @@ class AppState:
 
 
 app_state = AppState() 
+
+class SplashScreen(QWidget):
+    def __init__(self, pixmap):
+        super().__init__()
+
+        # Set window flags and attributes for a frameless, topmost, translucent window
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+
+        # Set up a QLabel to hold the pixmap
+        label = QLabel(self)
+        label.setPixmap(pixmap)
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Use a QVBoxLayout to center the label
+        layout = QVBoxLayout(self)
+        layout.addWidget(label)
+        layout.setContentsMargins(0, 0, 0, 0)  # Remove margins
+
+        # Set the size of the widget to the size of the pixmap
+        self.resize(pixmap.width(), pixmap.height())
+
+        # Apply rounded corners to the window using a painter path
+        self._apply_rounded_mask(pixmap.width(), pixmap.height(), radius=20)
+
+    def _apply_rounded_mask(self, width, height, radius):
+        """
+        Creates and applies a rounded mask to the widget using a QPainterPath.
+        """
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, width, height, radius, radius)  # Add a rounded rectangle
+
+        # Convert QPainterPath to QRegion for setting the mask
+        region = QRegion(path.toFillPolygon().toPolygon())
+        self.setMask(region)
 
 class ColorButtonWidget(QWidget):
     color_clicked = pyqtSignal(str)
@@ -211,6 +270,7 @@ class ColorButtonWidget(QWidget):
         self.color_clicked.emit(self.color_name)
 
     def eventFilter(self, obj, event):
+        self.update_text_color("white")
         if obj == self.button and event.type() == QEvent.Type.MouseButtonPress:
             if event.button() == Qt.MouseButton.RightButton:  # Detect right-click
                 # Switch to editable mode on right-click
@@ -235,6 +295,29 @@ class ColorButtonWidget(QWidget):
         self.button_named.emit(self.button_names)
         self.button_name = button_widget.text_background_label.text()
 
+    def update_text_color(self, mode):
+        """Update the text color of the button and editable area based on the mode."""
+        text_color = "white" if mode == "dark" else "black"
+        
+        # Update the QPushButton text color
+        self.text_background_label.setStyleSheet(
+            f"""
+            background-color: white;  /* White background behind text */
+            padding: 3px;
+            border-radius: 5px;
+            color: {text_color};  /* Update text color */
+            """
+        )
+        
+        # Update the QLineEdit text color
+        self.editable_area.setStyleSheet(
+            f"""
+            background-color: {self.color_hex};  /* Retain button color */
+            color: {text_color};  /* Update text color */
+            """
+        )
+
+
 
 class ParcelField(QWidget):
     def __init__(self):
@@ -254,6 +337,7 @@ class ParcelField(QWidget):
         self.parcel_colors = {}  # Dictionary to store parcel color mappings
         self.parcel_identifiers = {}  # Initialize the dictionary for parcel identifiers
         self.color_buttons = [] 
+        self.corner_labels = {}  # Dictionary to store references to corner labels
 
 
     def update_field(self, width, height, gap_x, gap_y, count_x, count_y, structure_changed=False):
@@ -341,7 +425,7 @@ class ParcelField(QWidget):
 
     def add_label_to_corner(self, text, x, y):
         """Helper function to add a label with a circle at a given position."""
-        logger.debug(f"adding label {text} at position ({x}, {y})")
+        logger.debug(f"Adding label {text} at position ({x}, {y})")
         
         # Draw a small circle
         circle_radius = 10
@@ -362,6 +446,10 @@ class ParcelField(QWidget):
         label.setDefaultTextColor(Qt.GlobalColor.black)
         self.scene.addItem(label)
 
+        # Store the label in the corner_labels dictionary
+        self.corner_labels[text] = label
+
+
 
     def add_axis_labels(self, total_width, total_height, scale_factor, offset_x, offset_y):
         logger.debug(f"adding axis labels with the value of: {total_width, total_height, scale_factor, offset_x, offset_y}")
@@ -371,12 +459,14 @@ class ParcelField(QWidget):
         x_label = QGraphicsTextItem(self.tr("Total X: {0}m").format(total_width))
         y_label = QGraphicsTextItem(self.tr("Total Y: {0}m").format(total_height))
 
-
         x_label.setPos(offset_x + displayed_width / 2 - x_label.boundingRect().width() / 2, self.total_height - self.margin + 5)
         y_label.setPos(self.margin - y_label.boundingRect().width() - 5, offset_y + displayed_height / 2 - y_label.boundingRect().height() / 2)
 
         self.scene.addItem(x_label)
         self.scene.addItem(y_label)
+
+        if app_state.night_mode:
+            self.update_text_item_colors("white")
 
     def set_current_color(self, button_widget, color):
         if isinstance(color, QColor):
@@ -496,10 +586,6 @@ class ParcelField(QWidget):
                     parcel.setBrush(QBrush(QColor(self.tr("white"))))
 
         event.accept()
-
-
-
-
 
     def show_warning(self, title, content):
         logger.debug(f"showing warning with the value of: {title, content}")
@@ -650,7 +736,18 @@ class ParcelField(QWidget):
                 parcel.setBrush(QBrush(QColor("white")))
                 self.parcel_colors[parcel_id] = ("white", parcel.rect().x(), parcel.rect().y())
 
-                
+    def update_text_item_colors(self, color):
+        """Update the text color of all QGraphicsTextItem elements in the scene."""
+        for item in self.scene.items():
+            if isinstance(item, QGraphicsTextItem):
+                item.setDefaultTextColor(QColor(color))
+
+    def update_corner_label_colors(self, color):
+        """Update the text color of corner labels."""
+        for label in self.corner_labels.values():
+            label.setDefaultTextColor(QColor(color))
+
+            
 
 import ctypes
 # Define Windows API function to get the console window handle
@@ -683,7 +780,6 @@ class MainWindow(QMainWindow):
         self.file_opened = False
         self.prev_count_x = None
         self.prev_count_y = None
-        icon_path = "C:\\Users\\Getac\\Documents\\Omer Mersin\\codes\\parcel_planner\\DRONETOOLS.ico"
         app_icon = QIcon(icon_path)
         self.setWindowIcon(app_icon)
 
@@ -742,6 +838,7 @@ class MainWindow(QMainWindow):
         gap_y_layout.addWidget(self.meter_label)  # Add QLabel to the layout
 
         self.empty_label = QLabel("           ")
+        self.empty_label.setStyleSheet("background-color: transparent;")  # Make transparent
         count_x_layout = QHBoxLayout()
         self.count_x_label = QLabel(self.tr("Parcels on X axis:"))
         self.count_x_input = QLineEdit("6")
@@ -753,6 +850,7 @@ class MainWindow(QMainWindow):
         count_x_layout.addWidget(self.empty_label)
 
         self.empty_label = QLabel("           ")
+        self.empty_label.setStyleSheet("background-color: transparent;")  # Make transparent
         count_y_layout = QHBoxLayout()
         self.count_y_label = QLabel(self.tr("Parcels on Y axis:"))
         self.count_y_input = QLineEdit("5")
@@ -828,7 +926,7 @@ class MainWindow(QMainWindow):
         main_layout = QHBoxLayout(container)
         main_layout.addWidget(splitter)
         self.setCentralWidget(container)
-        self.showMaximized()
+        # self.showMaximized()
 
         self.width_input.textChanged.connect(self.update_layout)
         self.height_input.textChanged.connect(self.update_layout)
@@ -865,6 +963,10 @@ class MainWindow(QMainWindow):
             self.toggle_night_mode()
         else:
             self.toggle_night_mode()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.setWindowState(Qt.WindowState.WindowMaximized)  # Ensure the window is in maximized state
 
     def load_settings_from_config(self):
         config = configparser.ConfigParser()
@@ -987,8 +1089,8 @@ class MainWindow(QMainWindow):
                 background-color: #2E2E2E;
                 color: white;
             }
-            QLabel, QLineEdit, QPushButton, QToolBar, QMenuBar, QStatusBar, QMessageBox, QGraphicsView, QGraphicsRectItem, QGraphicsTextItem {
-                background-color: #3A3A3A;
+            QLabel, QLineEdit, QPushButton, QToolBar, QMenuBar, QStatusBar, QMessageBox, QGraphicsView, QGraphicsRectItem {
+                background-color: transparent;
                 color: white;
             }
             QLineEdit {
@@ -997,6 +1099,7 @@ class MainWindow(QMainWindow):
             QPushButton {
                 background-color: #3A3A3A;
                 border: 1px solid #555555;
+                padding: 3px;
             }
             QPushButton:pressed {
                 background-color: #2A2A2A;
@@ -1010,11 +1113,17 @@ class MainWindow(QMainWindow):
             """
             self.setStyleSheet(dark_stylesheet)
             app_state.night_mode = True
+            self.parcel_field.update_text_item_colors("white")
+            self.parcel_field.update_corner_label_colors("black")  # Update corner labels
         else:
             # Apply day mode (reset stylesheet)
             self.setStyleSheet("")
             app_state.night_mode = False
+            self.parcel_field.update_text_item_colors("black")
+            self.parcel_field.update_corner_label_colors("black")  # Update corner labels
         self.save_settings_to_config(self.get_current_language(), self.night_mode_action.isChecked())
+
+
     
     def get_current_language(self):
         if self.lang_action_en.isChecked():
@@ -1096,6 +1205,7 @@ class MainWindow(QMainWindow):
             app_state.location = data["location"]
             app_state.spraying_width = data["spraying_width"]
             app_state.fit = data["fit"]
+            app_state.fit_gap = data["fit_gap"]
             app_state.button_params = data["params"]
             app_state.acc_buffer = data["acc_buffer"]
 
@@ -1182,6 +1292,7 @@ class MainWindow(QMainWindow):
                 "location": app_state.location,
                 "spraying_width": app_state.spraying_width,
                 "fit": app_state.fit,
+                "fit_gap": app_state.fit_gap,
                 'parcel_coordinates': app_state.parcel_coordinates,
                 'paths_by_color': app_state.paths_by_color,
                 'params': app_state.button_params,
@@ -1392,6 +1503,7 @@ class MainWindow(QMainWindow):
         app_state.location = app_state.location
         app_state.spraying_width = app_state.spraying_width
         app_state.fit = app_state.fit
+        app_state.fit = app_state.fit_gap
         self.file_opened = app_state.file_opened
         app_state.button_params = app_state.button_params
         app_state.acc_buffer = app_state.acc_buffer
@@ -1420,6 +1532,24 @@ class MainWindow(QMainWindow):
         self.colored_parcels = self.parcel_field.get_colored_parcels()
         sorted_parcels = sorted(self.colored_parcels.items(), key=lambda item: item[0])
         sorted_parcel_dict = {item[0]: item[1][0] for item in sorted_parcels}
+
+        if not app_state.fit:
+             app_state.original_width = self.width
+             app_state.original_height = self.height
+             app_state.original_gap_x = self.gap_x
+             app_state.original_gap_y = self.gap_y
+        else:
+             # Check if user changed anything
+             if (self.width != app_state.width or 
+                 self.height != app_state.height or 
+                 self.gap_x != app_state.gap_x or 
+                 self.gap_y != app_state.gap_y):
+                 
+                 app_state.fit = False
+                 app_state.original_width = self.width
+                 app_state.original_height = self.height
+                 app_state.original_gap_x = self.gap_x
+                 app_state.original_gap_y = self.gap_y
 
         app_state.save_state(
             self.button_names,
@@ -1500,24 +1630,37 @@ class MainWindow(QMainWindow):
             event.ignore()  # Cancel the close event
 
 if __name__ == "__main__":
-    logger.info("Starting parcel_main")
-    hide_console()
     app = QApplication(sys.argv)
-    load_translations(app)
-    icon_path = "C:\\Users\\Getac\\Documents\\Omer Mersin\\codes\\parcel_planner\\DRONETOOLS.ico"
+
+    # Set application icon
     app_icon = QIcon(icon_path)
     app.setWindowIcon(app_icon)
 
     # Ensure single instance
     semaphore = QSystemSemaphore('MyUniqueAppSemaphore', 1)
     semaphore.acquire()
-    
     shared_memory = QSharedMemory('MyUniqueAppSharedMemory')
     if not shared_memory.create(1):
         print("Another instance is already running.")
-        sys.exit(app.exec())
-    
-    window = MainWindow()
-    window.show()
+        sys.exit(0)
+
+    # # Load and resize the image
+    # pixmap = QPixmap(splash_path)
+    # resized_pixmap = pixmap.scaled(600, 400, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+
+    # # Create and display the custom splash screen
+    # splash = SplashScreen(resized_pixmap)
+    # splash.show()
+
+    # # Initialize the application in the background
+    # initialization_thread = InitializationThread()
+    # initialization_thread.initialization_done.connect(lambda: splash.close())  # Close splash when done
+    # initialization_thread.initialization_done.connect(lambda: MainWindow().show())  # Show main window when done
+    # initialization_thread.start()
+
+    if getattr(sys, 'frozen', False):
+        pyi_splash.close()
+
+    MainWindow().show()
 
     sys.exit(app.exec())

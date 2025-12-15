@@ -1,5 +1,5 @@
 import sys
-from PyQt6.QtWidgets import QApplication, QMainWindow, QHBoxLayout, QWidget, QSplitter, QLabel, QLineEdit, QFormLayout, QPushButton, QGridLayout, QSizePolicy, QRadioButton, QMessageBox, QToolBar, QFileDialog
+from PyQt6.QtWidgets import QApplication, QMainWindow, QHBoxLayout, QWidget, QSplitter, QLabel, QLineEdit, QFormLayout, QPushButton, QGridLayout, QSizePolicy, QRadioButton, QCheckBox, QMessageBox, QToolBar, QFileDialog
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QIcon, QAction
 import math
@@ -13,6 +13,9 @@ import logging
 import json
 from main import MapWidget
 from PyQt6.QtCore import QTranslator, QLocale
+
+sys.stdout.reconfigure(encoding='utf-8')
+
 # Carry only appstate between windows V
 # Fix to create mission with original paths for spray on and off V
 # RESTORE APP STATE DOESNT PROTECT THE PARAMS OF THE LAST BUTTON V
@@ -97,9 +100,9 @@ class PlannerMainWindow(QMainWindow):
         self.current_start_marker = None
         self.current_end_marker = None
 
-        self.clear_button = QPushButton(self.tr("Clear Parcels"))
-        self.clear_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.clear_button.clicked.connect(self.clear_parcels)
+        #self.clear_button = QPushButton(self.tr("Clear Parcels"))
+        #self.clear_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        #self.clear_button.clicked.connect(self.clear_parcels)
 
         self.back_button = QPushButton(self.tr("Previous Window"))
         self.back_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -169,15 +172,21 @@ class PlannerMainWindow(QMainWindow):
         self.spraying_width_input.textChanged.connect(self.update_spray_width)
         form_layout.addRow(self.spraying_width, self.spraying_width_input)
 
-        self.fit = QRadioButton()
+        self.fit = QCheckBox()
         self.fit.setText(self.tr("Do you want parcels to fit the area?"))
         form_layout.addRow(self.fit)
+
+        self.fit_gap = QCheckBox()
+        self.fit_gap.setText(self.tr("Preserve parcel size?"))
+        self.fit_gap.setVisible(False)  # Initially hide the second checkbox
+        self.fit_gap.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        form_layout.addRow(self.fit_gap)
 
 
         self.save_button = QPushButton(self.tr("Process"))
         self.save_button.clicked.connect(self.save)
         self.save_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        form_layout.addWidget(self.save_button)
+        form_layout.addRow(self.save_button)
         
 
         self.generate_report = QPushButton(self.tr("Generate Report"))
@@ -189,13 +198,14 @@ class PlannerMainWindow(QMainWindow):
         self.generate_mission = QPushButton(self.tr("Save the mission"))
         self.generate_mission.clicked.connect(lambda: self.create_mavlink_script(self.path))
         self.generate_mission.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.generate_mission.setVisible(False)
 
 
         
         self.total_length_label = QLabel(self.tr("Total Path Length: 0 meters"))
         self.total_length_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        form_layout.addRow(self.clear_button)
+        #form_layout.addRow(self.clear_button)
         form_layout.addRow(self.total_length_label)
 
         right_panel = QWidget()
@@ -258,19 +268,25 @@ class PlannerMainWindow(QMainWindow):
         self.application_dose_input.textChanged.connect(self.calculate_velocity)
         self.nozzle_rate_input.textChanged.connect(self.calculate_velocity)
         self.nozzle_number_input.textChanged.connect(self.calculate_velocity)
+        self.set_alt_input.textChanged.connect(self.save_to)
         self.set_acc_input.textChanged.connect(self.change_acc)
 
-
+        self.application_dose.setVisible(False)
+        self.application_dose_input.setVisible(False)
+        self.nozzle_rate.setVisible(False)
+        self.nozzle_rate_input.setVisible(False)
+        self.set_alt.setVisible(False)
+        self.set_alt_input.setVisible(False)
+        self.set_acc.setVisible(False)
+        self.set_acc_input.setVisible(False)
         form_layout.addRow(self.application_dose, self.application_dose_input)
         form_layout.addRow(self.nozzle_rate, self.nozzle_rate_input)
         form_layout.addRow(self.nozzle_number, self.nozzle_number_input)
         form_layout.addRow(self.set_alt, self.set_alt_input)
         form_layout.addRow(self.set_acc, self.set_acc_input)
 
-
         self.calculated_speed_label = QLabel(self.tr("Calculated Ground Speed: 0 km/h - 0 m/s"))
         form_layout.addRow(self.calculated_speed_label)
-
 
         form_layout.addRow(self.generate_mission)
         form_layout.addRow(self.generate_report)
@@ -298,24 +314,42 @@ class PlannerMainWindow(QMainWindow):
         # Label for the stitched image (hidden by default)
         # splitter.addWidget(self.image_label)
 
-        splitter.addWidget(right_panel)
-        splitter.setSizes([800, 200])
+        # Create a scroll area and make it resizable
+        scroll_area = QScrollArea()
+        scroll_area.setWidget(right_panel)
+        scroll_area.setWidgetResizable(True)
+
+        splitter.addWidget(scroll_area)
+        splitter.setSizes([750, 250])
 
         self.color_to_button_map = {widget.color_hex: widget.button_name for widget in self.color_button_widgets}
         
         self.config_file = resource_path("config.ini")
+        print(self.config_file)
         self.load_coordinates_from_config()
 
         container = QWidget()
         main_layout = QHBoxLayout(container)
+        # Remove padding and spacing
+        main_layout.setContentsMargins(0, 0, 0, 0)  # Set all margins (left, top, right, bottom) to 0
+        main_layout.setSpacing(0)  # Set spacing between widgets to 0
         main_layout.addWidget(splitter)
         self.setCentralWidget(container)
         # self.showMaximized()
+
+    # Method to toggle visibility
+    def toggle_fit_gap_visibility(self, state):
+        """
+        Toggles the visibility of the 'Preserve parcel size?' checkbox
+        based on the state of the 'Fit parcels to the area?' checkbox.
+        """
+        self.fit_gap.setVisible(state)
 
     def change_acc(self):
         self.paths_by_color.clear()
         try:
             self.acc_buffer = float(self.set_acc_input.text())
+            self.generate_path()
             if self.acc_buffer == "" or self.acc_buffer <= 0:
                 raise Exception
         except Exception:
@@ -358,6 +392,14 @@ class PlannerMainWindow(QMainWindow):
         # Update the spraying width from the input
         # self.spraying_width = self.spraying_width_input.text()
 
+    def save_to(self):
+        self.button_params[self.current_color_button.button_number] = {
+                "application_dose": self.application_dose_input.text(),
+                "nozzle_rate": self.nozzle_rate_input.text(),
+                "nozzle_number": self.nozzle_number_input.text(),
+                "altitude": self.set_alt_input.text(),
+            }
+
 
     def calculate_velocity(self):
         """
@@ -395,7 +437,6 @@ class PlannerMainWindow(QMainWindow):
                 logger.error(self.tr("Invalid input for nozzle number: {0}").format(self.nozzle_number_input.text()))
                 self.show_warning(self.tr("Invalid Input"), self.tr("Please enter a valid nozzle number."))
             return
-
         
         try:
             spraying_width = float(self.spraying_width_input.text())
@@ -581,8 +622,8 @@ class PlannerMainWindow(QMainWindow):
                 background-color: #2E2E2E;
                 color: white;
             }
-            QLabel, QLineEdit, QPushButton, QToolBar, QMenuBar, QStatusBar, QMessageBox, QGraphicsView, QGraphicsRectItem, QGraphicsTextItem {
-                background-color: #3A3A3A;
+            QLabel, QLineEdit, QPushButton, QToolBar, QMenuBar, QStatusBar, QMessageBox, QGraphicsView, QGraphicsRectItem, QGraphicsTextItem, QCheckBox {
+                background-color: transparent;
                 color: white;
             }
             QLineEdit {
@@ -591,15 +632,10 @@ class PlannerMainWindow(QMainWindow):
             QPushButton {
                 background-color: #3A3A3A;
                 border: 1px solid #555555;
+                padding: 3px;
             }
             QPushButton:pressed {
                 background-color: #2A2A2A;
-            }
-            QMenuBar {
-                background-color: #2E2E2E;
-            }
-            QMenuBar::item:selected {
-                background-color: #4E4E4E;
             }
             QPushButton {
             background-color: #3a3a3a;
@@ -608,6 +644,33 @@ class PlannerMainWindow(QMainWindow):
             }
             QRadioButton {
                 color: #ffffff; /* Ensure radio button text is white */
+            }
+             QScrollArea {
+                background-color: #2E2E2E;
+            }
+             QWidget {
+                background-color: #2E2E2E;
+            }
+            QMenuBar {
+                background-color: #2b2b2b;  /* Dark gray background for menu bar */
+                color: white;               /* White text */
+            }
+            QMenuBar::item {
+                background-color: transparent;
+                color: white;               /* White text for menu items */
+            }
+
+            QMenuBar::item:selected {
+                background-color: #555555;  /* Highlight color for selected menu item */
+            }
+
+            QMenu {
+                background-color: #2b2b2b;  /* Dark gray background for dropdown menus */
+                color: white;               /* White text for menu items */
+            }
+
+            QMenu::item:selected {
+                background-color: #555555;  /* Highlight color for selected menu item */
             }
             """
             self.setStyleSheet(dark_stylesheet)
@@ -630,7 +693,7 @@ class PlannerMainWindow(QMainWindow):
         self.lang_action_en.setText(self.tr("English"))
         self.lang_action_es.setText(self.tr("Español"))
 
-        self.clear_button.setText(self.tr("Clear Parcels"))
+        #self.clear_button.setText(self.tr("Clear Parcels"))
         self.back_button.setText(self.tr("Previous Window"))
         self.save_button.setText(self.tr("Process"))
         self.generate_report.setText(self.tr("Generate Report"))
@@ -669,16 +732,25 @@ class PlannerMainWindow(QMainWindow):
         self.total_length_label.setText(self.tr("Total Path Length: 0 meters"))
         
         try:
-            self.width_label.setText(self.tr("Parcel Width: {0} meters").format(self.width))
-            self.height_label.setText(self.tr("Parcel Height: {0} meters").format(self.height))
-            self.gap_x_layout.setText(self.tr("Gap X: {0} meters").format(self.gap_x))
-            self.gap_y_layout.setText(self.tr("Gap Y: {0} meters").format(self.gap_y))
+            is_fit = self.fit.isChecked()
+            if is_fit:
+                self.width_label.setText(self.tr("Parcel Width: {0:.2f} meters (≈ {1})").format(self.exact_width, self._width))
+                self.height_label.setText(self.tr("Parcel Height: {0:.2f} meters (≈ {1})").format(self.exact_height, self._height))
 
-            total_width = self.width * self.count_x + (self.count_x - 1) * self.gap_x
-            total_height = self.height * self.count_y + (self.count_y - 1) * self.gap_y
+                self.total_width.setText(self.tr("Total Width: {0:.2f} meters").format(self.fit_total_width))
+                self.total_height.setText(self.tr("Total Height: {0:.2f} meters").format(self.fit_total_height))
+            else:
+                self.width_label.setText(self.tr("Parcel Width: {0:.2f} meters").format(self._width))
+                self.height_label.setText(self.tr("Parcel Height: {0:.2f} meters").format(self._width))
 
-            self.total_width.setText(self.tr("Total Width: {0} meters").format(total_width))
-            self.total_height.setText(self.tr("Total Height: {0} meters").format(total_height))
+                total_width = self.width * self.count_x + (self.count_x - 1) * self.gap_x
+                total_height = self.height * self.count_y + (self.count_y - 1) * self.gap_y
+            
+                self.total_width.setText(self.tr("Total Width: {0:.2f} meters").format(total_width))
+                self.total_height.setText(self.tr("Total Height: {0:.2f} meters").format(total_height))
+
+            self.gap_x_layout.setText(self.tr("Gap X: {0:.2f} meters").format(self.gap_x))
+            self.gap_y_layout.setText(self.tr("Gap Y: {0:.2f} meters").format(self.gap_y))
         except:
             pass
 
@@ -723,6 +795,7 @@ class PlannerMainWindow(QMainWindow):
             location = data['location']
             spraying_width = data['spraying_width']
             fit = data['fit']
+            fit_gap = data['fit_gap']
             self.parcel_coordinates = data.get('parcel_coordinates', None)
             self.button_params = data["params"]
             self.acc_buffer = data["acc_buffer"]
@@ -731,6 +804,7 @@ class PlannerMainWindow(QMainWindow):
             app_state.location = location
             app_state.spraying_width = spraying_width
             app_state.fit = fit
+            app_state.fit_gap = fit_gap
             app_state.paths_by_color = self.paths_by_color
 
             # Ensure all parcels are included
@@ -800,6 +874,7 @@ class PlannerMainWindow(QMainWindow):
             app_state.location = location
             app_state.spraying_width = spraying_width
             app_state.fit = fit
+            app_state.fit_gap = fit_gap
             app_state.file_opened = self.file_opened
             app_state.button_params = self.button_params
             app_state.acc_buffer = self.acc_buffer
@@ -859,6 +934,7 @@ class PlannerMainWindow(QMainWindow):
                 ],
                 'spraying_width': self.spraying_width_input.text(),
                 'fit': self.fit.isChecked(),
+                'fit_gap': self.fit_gap.isChecked(),
                 'parcel_coordinates': self.parcel_coordinates,
                 'paths_by_color': self.paths_by_color,
                 'params': self.button_params,
@@ -999,9 +1075,15 @@ class PlannerMainWindow(QMainWindow):
 
         self.color_layout.update()
 
+        self.current_color_button = min(
+            self.color_button_widgets,
+            key=lambda btn: btn.button_number,
+        )
+
         app_state.location = app_state.location
         app_state.spraying_width = app_state.spraying_width
         app_state.fit = app_state.fit
+        app_state.fit_gap = app_state.fit_gap
 
         self.top_left_lat_input.setText(str(app_state.location[0][0]))
         self.top_left_lon_input.setText(str(app_state.location[0][1]))
@@ -1013,9 +1095,10 @@ class PlannerMainWindow(QMainWindow):
         self.bot_right_lon_input.setText(str(app_state.location[3][1]))
         self.spraying_width_input.setText(str(app_state.spraying_width))
         self.fit.setChecked(app_state.fit)
+        self.fit_gap.setChecked(app_state.fit_gap)
 
         self.generate_mission.setText(self.tr("Save Mission"))
-        self.generate_mission.setStyleSheet(f"background-color: None; color: black;")
+        # self.generate_mission.setStyleSheet(f"background-color: None; color: black;")
         self.load_coordinates_from_config()
         self.clear_parcels()
 
@@ -1067,8 +1150,8 @@ class PlannerMainWindow(QMainWindow):
 
         # Determine whether to use fitted dimensions or default ones
         if self.fit.isChecked():  # If 'fit' is selected, use fitted dimensions
-            width_to_report = self.exact_width
-            height_to_report = self.exact_height
+            width_to_report = self.final_width
+            height_to_report = self.final_height
             gap_x_to_report = self.gap_x
             gap_y_to_report = self.gap_y
         else:  # Otherwise, use default dimensions
@@ -1098,14 +1181,13 @@ class PlannerMainWindow(QMainWindow):
         
         # Add spray width and corner coordinates
         report_lines.append(f"Spraying Width: {self.spraying_width_input.text()}\n")
-        report_lines.append(f"Top Left Coordinates: {self.top_left_lat_input.text(), self.top_left_lon_input.text()}\n")
-        report_lines.append(f"Top Right Coordinates: {self.top_right_lat_input.text(), self.top_left_lon_input.text()}\n")
-        report_lines.append(f"Bottom Left Coordinates: {self.bot_left_lat_input.text(), self.bot_left_lon_input.text()}\n")
-        report_lines.append(f"Bottom Right Coordinates: {self.bot_right_lat_input.text(), self.bot_right_lon_input.text()}\n")
+        report_lines.append(f"A Coordinates: ({round(float(self.top_left_lat_input.text()), 7)}, {round(float(self.top_left_lon_input.text()), 7)})\n")
+        report_lines.append(f"B Coordinates: ({round(float(self.top_right_lat_input.text()), 7)}, {round(float(self.top_left_lon_input.text()), 7)})\n")
+        report_lines.append(f"C Coordinates: ({round(float(self.bot_left_lat_input.text()), 7)}, {round(float(self.bot_left_lon_input.text()), 7)})\n")
+        report_lines.append(f"D Coordinates: ({round(float(self.bot_right_lat_input.text()), 7)}, {round(float(self.bot_right_lon_input.text()), 7)})\n")
         report_lines.append(f"Fit area: {app_state.fit}\n")
+        report_lines.append(f"Parcel size preserved: {app_state.fit_gap}\n")
         report_lines.append("\n")
-
-
 
         # Add parcel structure and colors
         report_lines.append("Parcel Structure and Colors:\n")
@@ -1120,7 +1202,7 @@ class PlannerMainWindow(QMainWindow):
             report_lines.append(f"  Liquid Name: {button_name}\n")
             report_lines.append("  Coordinates:\n")
             for coord in coordinates:
-                report_lines.append(f"    - Lat: {coord['lat']}, Lon: {coord['lng']}\n")
+                report_lines.append(f"    - Lat: {round(float(coord['lat']), 7)}, Lon: {round(float(coord['lng']), 7)}\n")
             report_lines.append("\n")
 
         # Ensure paths are generated for all colors
@@ -1161,8 +1243,8 @@ class PlannerMainWindow(QMainWindow):
                 report_lines.append(f"  Path Coordinates:\n")
                 for i in range(0, len(paths), 2):
                     report_lines.append(f"    Segment {i // 2 + 1}:\n")
-                    report_lines.append(f"      Start: Lat: {paths[i][0]}, Lon: {paths[i][1]}\n")
-                    report_lines.append(f"      End: Lat: {paths[i+1][0]}, Lon: {paths[i+1][1]}\n")
+                    report_lines.append(f"      Start: Lat: {round(float(paths[i][0]), 7)}, Lon: {round(float(paths[i][1]), 7)}\n")
+                    report_lines.append(f"      End: Lat: {round(float(paths[i+1][0]), 7)}, Lon: {round(float(paths[i+1][1]), 7)}\n")
                 report_lines.append("\n")
         else:
             report_lines.append("  No paths generated yet.\n")
@@ -1244,6 +1326,28 @@ class PlannerMainWindow(QMainWindow):
         self.button_names = button_names
         self.color_to_button_map = {widget.color_hex: widget.button_name for widget in self.color_button_widgets}
 
+    def change_visibility(self, visible=True):
+        if visible:
+            self.application_dose.setVisible(True)
+            self.application_dose_input.setVisible(True)
+            self.nozzle_rate.setVisible(True)
+            self.nozzle_rate_input.setVisible(True)
+            self.set_alt.setVisible(True)
+            self.set_alt_input.setVisible(True)
+            self.set_acc.setVisible(True)
+            self.set_acc_input.setVisible(True)
+            self.generate_mission.setVisible(True)
+        else:
+            self.application_dose.setVisible(False)
+            self.application_dose_input.setVisible(False)
+            self.nozzle_rate.setVisible(False)
+            self.nozzle_rate_input.setVisible(False)
+            self.set_alt.setVisible(False)
+            self.set_alt_input.setVisible(False)
+            self.set_acc.setVisible(False)
+            self.set_acc_input.setVisible(False)
+            self.generate_mission.setVisible(False)
+
 
     def set_current_color(self, button, color):
         logger.debug(f"setting current color with the value of: {button}, {color}")
@@ -1269,7 +1373,9 @@ class PlannerMainWindow(QMainWindow):
 
         # Attempt to generate the path
         path_generated_successfully = self.generate_path()
-
+        if path_generated_successfully == False:
+            return False
+        
         # Only calculate velocity if path generation was successful
         if path_generated_successfully:
             self.calculate_velocity()
@@ -1288,6 +1394,8 @@ class PlannerMainWindow(QMainWindow):
                 "nozzle_number": "4",
                 "altitude": "25",
             }
+        
+        self.change_visibility()
 
         # Update the input fields with the current button's params
         self.application_dose_input.blockSignals(True)
@@ -1336,7 +1444,6 @@ class PlannerMainWindow(QMainWindow):
         self.generate_mission.setStyleSheet(f"background-color: {color_hex}; color: black;")
 
 
-
     def save(self):
         logger.debug("saving field coordinates")
         self.clear_parcels()
@@ -1352,17 +1459,22 @@ class PlannerMainWindow(QMainWindow):
             b_l_lon = float(self.bot_left_lon_input.text())
             b_r_lat = float(self.bot_right_lat_input.text())
             b_r_lon = float(self.bot_right_lon_input.text())
-        except:
+        except ValueError:
             self.show_warning(self.tr("Wrong Input"), self.tr("Please check inputs for coordinates"))
             return
 
+        # Define the corners in the required order
         area_corners = [
             [t_l_lat, t_l_lon],  # Top-left
             [t_r_lat, t_r_lon],  # Top-right
             [b_r_lat, b_r_lon],  # Bottom-right
             [b_l_lat, b_l_lon]   # Bottom-left
         ]
-        
+        self.width = app_state.width
+        self.height = app_state.height
+        self.gap_x = app_state.gap_x
+        self.gap_y = app_state.gap_y
+        # Checkboxes
         is_fit = self.fit.isChecked()
         app_state.fit = is_fit
         if is_fit:
@@ -1406,8 +1518,11 @@ class PlannerMainWindow(QMainWindow):
             self.total_width.setText(self.tr("Total Width: {0:.2f} meters").format(total_width))
             self.total_height.setText(self.tr("Total Height: {0:.2f} meters").format(total_height))
 
-            
         else:
+            self.width = app_state.original_width
+            self.height = app_state.original_height
+            self.gap_x = app_state.original_gap_x
+            self.gap_y = app_state.original_gap_y
             try:
                 total_width = self.width * self.count_x + (self.count_x - 1) * self.gap_x
                 total_height = self.height * self.count_y + (self.count_y - 1) * self.gap_y
@@ -1420,10 +1535,10 @@ class PlannerMainWindow(QMainWindow):
                 self.total_width.setText(self.tr("Total Width: {0:.2f} meters").format(total_width))
                 self.total_height.setText(self.tr("Total Height: {0:.2f} meters").format(total_height))
             except:
-                self.width = app_state.width
-                self.height = app_state.height
-                self.gap_x = app_state.gap_x
-                self.gap_y = app_state.gap_y
+                self.width = app_state.original_width
+                self.height = app_state.original_height
+                self.gap_x = app_state.original_gap_x
+                self.gap_y = app_state.original_gap_y
                 self.count_x = app_state.count_x
                 self.count_y = app_state.count_y
                 total_width = self.width * self.count_x + (self.count_x - 1) * self.gap_x
@@ -1463,34 +1578,18 @@ class PlannerMainWindow(QMainWindow):
             }});
             parcels.push(parcel{i});
             """
-            self.parcel_js_references.append(f"parcel{i}")  # Store JavaScript reference
+            self.parcel_js_references.append(f"parcel{i}")
 
+        # Optionally run the JavaScript to add these polygons to the map:
         # self.map_widget.view.page().runJavaScript(js_code)
 
-        # Convert the input strings to float for latitude and longitude
-        t_l_lat = float(self.top_left_lat_input.text())
-        t_l_lon = float(self.top_left_lon_input.text())
-        t_r_lat = float(self.top_right_lat_input.text())
-        t_r_lon = float(self.top_right_lon_input.text())
-        b_l_lat = float(self.bot_left_lat_input.text())
-        b_l_lon = float(self.bot_left_lon_input.text())
-        b_r_lat = float(self.bot_right_lat_input.text())
-        b_r_lon = float(self.bot_right_lon_input.text())
-
-        # Calculate the center for latitude and longitude
+        # Re-center the map on the middle of the field
         center_lat = (t_l_lat + b_l_lat + t_r_lat + b_r_lat) / 4
-        center_lon = (t_l_lon + t_r_lon + b_l_lon + b_r_lon) / 4
-
-        if t_l_lat:
-            # JavaScript code to update the map center and zoom level
-            zoom_level = 18  # Set your desired zoom level here
-            js_code = f"""
-            map.setCenter({{ lat: parseFloat({center_lat}), lng: parseFloat({center_lon}) }});
-            map.setZoom({zoom_level});
-            """
-            # self.map_widget.view.page().runJavaScript(js_code)
-
+        center_lon = (t_l_lon + b_r_lon + t_r_lon + b_l_lon) / 4
+        zoom_level = 18
         self.map_widget.generate_parcels(self.parcel_coordinates, center_lat, center_lon, zoom_level)
+
+        # Switch language to whatever the app_state says
         self.change_language(app_state.language)
 
     def window(self, window):
@@ -2244,6 +2343,11 @@ class PlannerMainWindow(QMainWindow):
         config['Settings']['night_mode'] = str(night_mode)
         with open(self.config_file, 'w') as configfile:
             config.write(configfile)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.setWindowState(Qt.WindowState.WindowMaximized)  # Ensure the window is in maximized state
+        self.change_visibility(visible=False)
 
 
 if __name__ == "__main__":
