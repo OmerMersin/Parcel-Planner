@@ -135,6 +135,10 @@ class AppState:
         self.file_opened = False
         self.language = "en" 
         self.night_mode = False
+        self.original_width = 3.0
+        self.original_height = 5.0
+        self.original_gap_x = 0.3
+        self.original_gap_y = 1.0
 
     
     def save_state(self, button_names, width, height, gap_x, gap_y, count_x, count_y, colored_parcels):
@@ -1528,6 +1532,24 @@ class MainWindow(QMainWindow):
         self.colored_parcels = self.parcel_field.get_colored_parcels()
         sorted_parcels = sorted(self.colored_parcels.items(), key=lambda item: item[0])
         sorted_parcel_dict = {item[0]: item[1][0] for item in sorted_parcels}
+
+        if not app_state.fit:
+             app_state.original_width = self.width
+             app_state.original_height = self.height
+             app_state.original_gap_x = self.gap_x
+             app_state.original_gap_y = self.gap_y
+        else:
+             # Check if user changed anything
+             if (self.width != app_state.width or 
+                 self.height != app_state.height or 
+                 self.gap_x != app_state.gap_x or 
+                 self.gap_y != app_state.gap_y):
+                 
+                 app_state.fit = False
+                 app_state.original_width = self.width
+                 app_state.original_height = self.height
+                 app_state.original_gap_x = self.gap_x
+                 app_state.original_gap_y = self.gap_y
 
         app_state.save_state(
             self.button_names,

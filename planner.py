@@ -1,5 +1,5 @@
 import sys
-from PyQt6.QtWidgets import QApplication, QMainWindow, QHBoxLayout, QWidget, QSplitter, QLabel, QLineEdit, QFormLayout, QPushButton, QGridLayout, QSizePolicy, QRadioButton, QMessageBox, QToolBar, QFileDialog, QCheckBox, QScrollArea
+from PyQt6.QtWidgets import QApplication, QMainWindow, QHBoxLayout, QWidget, QSplitter, QLabel, QLineEdit, QFormLayout, QPushButton, QGridLayout, QSizePolicy, QRadioButton, QCheckBox, QMessageBox, QToolBar, QFileDialog
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QIcon, QAction
 import math
@@ -173,9 +173,7 @@ class PlannerMainWindow(QMainWindow):
         form_layout.addRow(self.spraying_width, self.spraying_width_input)
 
         self.fit = QCheckBox()
-        self.fit.setText(self.tr("Fit parcels to the area?"))
-        self.fit.stateChanged.connect(self.toggle_fit_gap_visibility)  # Connect the signal
-        self.fit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.fit.setText(self.tr("Do you want parcels to fit the area?"))
         form_layout.addRow(self.fit)
 
         self.fit_gap = QCheckBox()
@@ -1478,77 +1476,90 @@ class PlannerMainWindow(QMainWindow):
         self.gap_y = app_state.gap_y
         # Checkboxes
         is_fit = self.fit.isChecked()
-        is_preserved = self.fit_gap.isChecked()
+        app_state.fit = is_fit
+        if is_fit:
+            # Calculate the distance between the corners (top-left and top-right for width, top-left and bottom-left for height)
+            top_left = (t_l_lat, t_l_lon)
+            top_right = (t_r_lat, t_r_lon)
+            bottom_left = (b_l_lat, b_l_lon)
 
-        # ---------------
-        #  NEW LOGIC: Rely on ParcelGenerator to do the fitting logic
-        # ---------------
-        # We pass self._width, self._height, self.gap_x, self.gap_y into the generator.
-        # The advanced ParcelGenerator will:
-        #   - do NO scaling if is_fit=False
-        #   - scale both parcels & gaps if is_fit=True & preserve=False
-        #   - keep original parcel size & scale ONLY gaps if is_fit=True & preserve=True
+            # Calculate total width and height using haversine formula or simple Euclidean distance
+            def haversine(lat1, lon1, lat2, lon2):
+                from math import radians, cos, sin, sqrt, atan2
+                
+                # Approximate radius of earth in km
+                R = 6371.0
+                
+                lat1, lon1 = radians(lat1), radians(lon1)
+                lat2, lon2 = radians(lat2), radians(lon2)
 
-        generator, new_gaps = ParcelGenerator.create(
-            area_corners,
-            self.width,                # or self.width (your initial desired parcel width)
-            self.height,               # or self.height (your initial desired parcel height)
-            self.gap_x,                 # initial gap X
-            self.gap_y,                 # initial gap Y
-            self.count_x,
-            self.count_y,
-            is_fit,                     # from checkbox
-            is_preserved,               # from checkbox
-            self.color_codes_list
-        )
+                dlat = lat2 - lat1
+                dlon = lon2 - lon1
+                
+                a = sin(dlat / 2)**2 + cos(lat1) * cos(lat2) * sin(dlon / 2)**2
+                c = 2 * atan2(sqrt(a), sqrt(1 - a))
+                
+                return R * c * 1000  # Return distance in meters
 
-        # After creation, the generator may have adjusted (scaled) values:
-        #   - If is_fit=False → no changes
-        #   - If is_fit=True & preserve=False → both parcels & gaps scaled
-        #   - If is_fit=True & preserve=True  → parcel size unchanged, but gaps scaled
+            total_width = haversine(t_l_lat, t_l_lon, t_r_lat, t_r_lon)  # Distance between top-left and top-right corners
+            total_height = haversine(t_l_lat, t_l_lon, b_l_lat, b_l_lon)  # Distance between top-left and bottom-left corners
 
-        # new_gaps is a tuple (gap_x, gap_y) after scaling
-        self.gap_x, self.gap_y = new_gaps
+            # Calculate the new parcel width, height, gap_x, and gap_y based on the total area and the number of parcels
+            self.exact_width = total_width / self.count_x  # Adjust width to fit within the area
+            self.exact_height = total_height / self.count_y  # Adjust height to fit within the area
+            self.width = round(self.exact_width)
+            self.height = round(self.exact_height)
 
-        # Retrieve final parcel sizes from generator
-        self.final_width = generator.parcel_width_m
-        self.final_height = generator.parcel_height_m
+            # Update the labels with the fitted dimensions using self.tr
+            self.width_label.setText(self.tr("Parcel Width: {0:.2f} meters (≈ {1})").format(self.exact_width, self.width))
+            self.height_label.setText(self.tr("Parcel Height: {0:.2f} meters (≈ {1})").format(self.exact_height, self.height))
+            self.gap_x_layout.setText(self.tr("Gap X: {0:.2f} meters").format(self.gap_x))
+            self.gap_y_layout.setText(self.tr("Gap Y: {0:.2f} meters").format(self.gap_y))
+            self.total_width.setText(self.tr("Total Width: {0:.2f} meters").format(total_width))
+            self.total_height.setText(self.tr("Total Height: {0:.2f} meters").format(total_height))
 
-        # ---------------
-        #  Update the UI to reflect the final (possibly scaled) dimensions
-        # ---------------
-        # For example:
-        self.width_label.setText(
-            self.tr("Parcel Width: {0:.2f} meters").format(self.final_width)
-        )
-        self.height_label.setText(
-            self.tr("Parcel Height: {0:.2f} meters").format(self.final_height)
-        )
-        self.gap_x_layout.setText(
-            self.tr("Gap X: {0:.2f} meters").format(self.gap_x)
-        )
-        self.gap_y_layout.setText(
-            self.tr("Gap Y: {0:.2f} meters").format(self.gap_y)
-        )
+        else:
+            self.width = app_state.original_width
+            self.height = app_state.original_height
+            self.gap_x = app_state.original_gap_x
+            self.gap_y = app_state.original_gap_y
+            try:
+                total_width = self.width * self.count_x + (self.count_x - 1) * self.gap_x
+                total_height = self.height * self.count_y + (self.count_y - 1) * self.gap_y
 
-        # If you want to compute total area usage, for instance:
-        total_width = self.final_width * self.count_x + self.gap_x * (self.count_x - 1)
-        total_height = self.final_height * self.count_y + self.gap_y * (self.count_y - 1)
+                # Update the labels with the fitted dimensions using self.tr
+                self.width_label.setText(self.tr("Parcel Width: {0:.2f} meters").format(self.width))
+                self.height_label.setText(self.tr("Parcel Height: {0:.2f} meters").format(self.height))
+                self.gap_x_layout.setText(self.tr("Gap X: {0:.2f} meters").format(self.gap_x))
+                self.gap_y_layout.setText(self.tr("Gap Y: {0:.2f} meters").format(self.gap_y))
+                self.total_width.setText(self.tr("Total Width: {0:.2f} meters").format(total_width))
+                self.total_height.setText(self.tr("Total Height: {0:.2f} meters").format(total_height))
+            except:
+                self.width = app_state.original_width
+                self.height = app_state.original_height
+                self.gap_x = app_state.original_gap_x
+                self.gap_y = app_state.original_gap_y
+                self.count_x = app_state.count_x
+                self.count_y = app_state.count_y
+                total_width = self.width * self.count_x + (self.count_x - 1) * self.gap_x
+                total_height = self.height * self.count_y + (self.count_y - 1) * self.gap_y
 
-        self.total_width.setText(
-            self.tr("Total Width: {0:.2f} meters").format(total_width)
-        )
-        self.total_height.setText(
-            self.tr("Total Height: {0:.2f} meters").format(total_height)
-        )
+                # Update the labels with the fitted dimensions using self.tr
+                self.width_label.setText(self.tr("Parcel Width: {0:.2f} meters").format(self.width))
+                self.height_label.setText(self.tr("Parcel Height: {0:.2f} meters").format(self.height))
+                self.gap_x_layout.setText(self.tr("Gap X: {0:.2f} meters").format(self.gap_x))
+                self.gap_y_layout.setText(self.tr("Gap Y: {0:.2f} meters").format(self.gap_y))
+                self.total_width.setText(self.tr("Total Width: {0:.2f} meters").format(total_width))
+                self.total_height.setText(self.tr("Total Height: {0:.2f} meters").format(total_height))
+        try:
+            generator = ParcelGenerator(area_corners, self.width, self.height, self.gap_x, self.gap_y, self.count_x, self.count_y, is_fit, self.color_codes_list)
+            self.parcel_coordinates = (generator.generate_parcel_coordinates())
+        except:
+            self.show_warning(self.tr("Saving Failed!"), self.tr("Please check the input fields and try again."))
+            return
+        
 
-        # ---------------
-        #  Generate the actual parcel coordinates
-        # ---------------
-        self.parcel_coordinates = generator.generate_parcel_coordinates()
-
-        # Build your JS code (or delegate to map widget)
-        js_code = "var parcels = [];\n"
+        js_code = "var parcels = [];\n"  # Initialize the parcels array
         for i, parcel_info in enumerate(self.parcel_coordinates):
             coordinates = parcel_info['coordinates']
             color = parcel_info['color']
