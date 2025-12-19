@@ -10,7 +10,7 @@ a = Analysis(
         ('web_resources', 'web_resources'),
         ('translated_es.qm', '.'),
         ('DRONETOOLS.ico', '.'),
-        ('splash4.png', '.')
+        ('splash5.png', '.')
     ],
     hiddenimports=[],
     hookspath=[],
@@ -51,6 +51,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon="C:\\Users\\Getac\\Documents\\Omer Mersin\\codes\\parcel_planner\\parceland\\DRONETOOLS.ico",
+    icon="C:\\Users\\PC1\\Developer\\Parcel-Planner\\Parcel-Planner\\DRONETOOLS.ico",
     onefile=True,
 )
