@@ -1,5 +1,5 @@
 import sys
-from PyQt6.QtWidgets import QApplication, QMainWindow, QHBoxLayout, QWidget, QSplitter, QLabel, QLineEdit, QFormLayout, QPushButton, QGridLayout, QSizePolicy, QRadioButton, QCheckBox, QMessageBox, QToolBar, QFileDialog
+from PyQt6.QtWidgets import QApplication, QMainWindow, QHBoxLayout, QWidget, QSplitter, QLabel, QLineEdit, QFormLayout, QPushButton, QGridLayout, QSizePolicy, QRadioButton, QCheckBox, QMessageBox, QToolBar, QFileDialog, QScrollArea
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QIcon, QAction
 import math
@@ -13,6 +13,7 @@ import logging
 import json
 from main import MapWidget
 from PyQt6.QtCore import QTranslator, QLocale
+from PyQt6.QtCore import QTimer
 
 sys.stdout.reconfigure(encoding='utf-8')
 
@@ -80,6 +81,7 @@ class PlannerMainWindow(QMainWindow):
         self.button_name = None
         self.button_params = {}
         self.parcel_points_by_color = {}
+        self.color_codes_list = []
 
         # Replace the ParcelField with a QWebEngineView for the map
         logger.debug("map initialized")
@@ -87,6 +89,11 @@ class PlannerMainWindow(QMainWindow):
         # self.map_view.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
         # self.map_view.setUrl(QUrl("http://localhost:8000/map.html"))
         self.map_widget = MapWidget()
+        try:
+            self.map_widget.mapReady.connect(self._sync_corners_to_map)
+            self.map_widget.cornerMoved.connect(self._on_corner_moved)
+        except Exception:
+            pass
 
 
         self.file_opened = False
@@ -114,6 +121,8 @@ class PlannerMainWindow(QMainWindow):
         self.top_left_lat_input = QLineEdit("37.32500")
         self.top_left_lon = QLabel("lon:")
         self.top_left_lon_input = QLineEdit("-6.02884")
+        self.top_left_lat_input.editingFinished.connect(self._sync_corners_to_map)
+        self.top_left_lon_input.editingFinished.connect(self._sync_corners_to_map)
         self.top_left.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         hbox = QHBoxLayout()
         hbox.addWidget(self.top_left)
@@ -128,6 +137,8 @@ class PlannerMainWindow(QMainWindow):
         self.top_right_lat_input = QLineEdit("37.32490")
         self.top_right_lon = QLabel("lon:")
         self.top_right_lon_input = QLineEdit("-6.02861")
+        self.top_right_lat_input.editingFinished.connect(self._sync_corners_to_map)
+        self.top_right_lon_input.editingFinished.connect(self._sync_corners_to_map)
         self.top_right.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         hbox = QHBoxLayout()
         hbox.addWidget(self.top_right)
@@ -142,6 +153,8 @@ class PlannerMainWindow(QMainWindow):
         self.bot_left_lat_input = QLineEdit("37.32466")
         self.bot_left_lon = QLabel("lon:")
         self.bot_left_lon_input = QLineEdit("-6.02899")
+        self.bot_left_lat_input.editingFinished.connect(self._sync_corners_to_map)
+        self.bot_left_lon_input.editingFinished.connect(self._sync_corners_to_map)
         self.bot_left.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         hbox = QHBoxLayout()
         hbox.addWidget(self.bot_left)
@@ -157,6 +170,8 @@ class PlannerMainWindow(QMainWindow):
         self.bot_right_lat_input = QLineEdit("37.32427")
         self.bot_right_lon = QLabel("lon:")
         self.bot_right_lon_input = QLineEdit("-6.02829")
+        self.bot_right_lat_input.editingFinished.connect(self._sync_corners_to_map)
+        self.bot_right_lon_input.editingFinished.connect(self._sync_corners_to_map)
         self.bot_right.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         hbox = QHBoxLayout()
         hbox.addWidget(self.bot_right)
@@ -171,6 +186,7 @@ class PlannerMainWindow(QMainWindow):
         self.spraying_width.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.spraying_width_input.textChanged.connect(self.update_spray_width)
         form_layout.addRow(self.spraying_width, self.spraying_width_input)
+        self.spraying_width_input.editingFinished.connect(self._normalize_number_inputs)
 
         self.fit = QCheckBox()
         self.fit.setText(self.tr("Do you want parcels to fit the area?"))
@@ -198,6 +214,9 @@ class PlannerMainWindow(QMainWindow):
         self.generate_mission = QPushButton(self.tr("Save the mission"))
         self.generate_mission.clicked.connect(lambda: self.create_mavlink_script(self.path))
         self.generate_mission.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+        # Ensure default corner markers show up once the map is loaded
+        QTimer.singleShot(0, self._sync_corners_to_map)
         self.generate_mission.setVisible(False)
 
 
@@ -345,10 +364,94 @@ class PlannerMainWindow(QMainWindow):
         """
         self.fit_gap.setVisible(state)
 
+    def _parse_float(self, text):
+        """
+        Accept both comma and dot as decimal separators.
+        """
+        return float(str(text).strip().replace(",", "."))
+
+    def _normalize_number_inputs(self):
+        """
+        Normalize numeric fields to dot-decimal formatting so values stay consistent.
+        """
+        for line_edit in [
+            self.top_left_lat_input,
+            self.top_left_lon_input,
+            self.top_right_lat_input,
+            self.top_right_lon_input,
+            self.bot_left_lat_input,
+            self.bot_left_lon_input,
+            self.bot_right_lat_input,
+            self.bot_right_lon_input,
+            self.spraying_width_input,
+            getattr(self, "application_dose_input", None),
+            getattr(self, "nozzle_rate_input", None),
+            getattr(self, "nozzle_number_input", None),
+            getattr(self, "set_alt_input", None),
+            getattr(self, "set_acc_input", None),
+        ]:
+            if line_edit is None:
+                continue
+            try:
+                value = self._parse_float(line_edit.text())
+            except Exception:
+                continue
+            if line_edit in (
+                self.top_left_lat_input,
+                self.top_left_lon_input,
+                self.top_right_lat_input,
+                self.top_right_lon_input,
+                self.bot_left_lat_input,
+                self.bot_left_lon_input,
+                self.bot_right_lat_input,
+                self.bot_right_lon_input,
+            ):
+                line_edit.setText(f"{value:.7f}")
+            else:
+                line_edit.setText(str(value))
+
+    def _get_corner_coords(self):
+        return {
+            "A": (self._parse_float(self.top_left_lat_input.text()), self._parse_float(self.top_left_lon_input.text())),
+            "B": (self._parse_float(self.top_right_lat_input.text()), self._parse_float(self.top_right_lon_input.text())),
+            "C": (self._parse_float(self.bot_left_lat_input.text()), self._parse_float(self.bot_left_lon_input.text())),
+            "D": (self._parse_float(self.bot_right_lat_input.text()), self._parse_float(self.bot_right_lon_input.text())),
+        }
+
+    def _sync_corners_to_map(self):
+        """
+        Push current A/B/C/D inputs to the map as draggable markers.
+        """
+        try:
+            corners = self._get_corner_coords()
+        except Exception:
+            return
+        try:
+            self.map_widget.set_corner_markers(corners)
+        except Exception:
+            pass
+
+    def _on_corner_moved(self, corner_name, lat, lon):
+        """
+        Update coordinate inputs when user drags a corner marker on the map.
+        """
+        if corner_name == "A":
+            self.top_left_lat_input.setText(f"{lat:.7f}")
+            self.top_left_lon_input.setText(f"{lon:.7f}")
+        elif corner_name == "B":
+            self.top_right_lat_input.setText(f"{lat:.7f}")
+            self.top_right_lon_input.setText(f"{lon:.7f}")
+        elif corner_name == "C":
+            self.bot_left_lat_input.setText(f"{lat:.7f}")
+            self.bot_left_lon_input.setText(f"{lon:.7f}")
+        elif corner_name == "D":
+            self.bot_right_lat_input.setText(f"{lat:.7f}")
+            self.bot_right_lon_input.setText(f"{lon:.7f}")
+
     def change_acc(self):
         self.paths_by_color.clear()
         try:
-            self.acc_buffer = float(self.set_acc_input.text())
+            self.acc_buffer = self._parse_float(self.set_acc_input.text())
             self.generate_path()
             if self.acc_buffer == "" or self.acc_buffer <= 0:
                 raise Exception
@@ -409,7 +512,7 @@ class PlannerMainWindow(QMainWindow):
             
         # Get application dose and nozzle rate from inputs
         try:
-            application_dose = float(self.application_dose_input.text())
+            application_dose = self._parse_float(self.application_dose_input.text())
             if application_dose == "" or application_dose <= 0:
                 raise Exception
         except Exception:
@@ -419,7 +522,7 @@ class PlannerMainWindow(QMainWindow):
             return
 
         try:
-            nozzle_rate = float(self.nozzle_rate_input.text())
+            nozzle_rate = self._parse_float(self.nozzle_rate_input.text())
             if nozzle_rate == "" or nozzle_rate <= 0:
                 raise Exception
         except Exception:
@@ -429,7 +532,7 @@ class PlannerMainWindow(QMainWindow):
             return
         
         try:
-            nozzle_number = float(self.nozzle_number_input.text())
+            nozzle_number = self._parse_float(self.nozzle_number_input.text())
             if nozzle_number == "" or nozzle_number <= 0:
                 raise Exception
         except Exception:
@@ -439,7 +542,7 @@ class PlannerMainWindow(QMainWindow):
             return
         
         try:
-            spraying_width = float(self.spraying_width_input.text())
+            spraying_width = self._parse_float(self.spraying_width_input.text())
             if spraying_width == "" or spraying_width <= 0:
                 raise Exception
         except Exception:
@@ -486,7 +589,7 @@ class PlannerMainWindow(QMainWindow):
         # print(f"Total required solution (caldo_necesario): {caldo_necesario:.2f} L")
 
         # Calculate solution needed per parcel
-        caldo_per_plot = caldo_necesario / (number_of_parcels * self.width / float(self.spraying_width_input.text()))
+        caldo_per_plot = caldo_necesario / (number_of_parcels * self.width / spraying_width)
         # print(f"Solution needed per parcel (caldo_per_plot): {caldo_per_plot:.2f} L")
 
         # Assume number of nozzles (boquillas)
@@ -791,7 +894,7 @@ class PlannerMainWindow(QMainWindow):
             self.gap_y = data['gap_y']
             self.count_x = data['count_x']
             self.count_y = data['count_y']
-            self.colored_parcels = data['colored_parcels']
+            self._set_colored_parcels(data['colored_parcels'])
             location = data['location']
             spraying_width = data['spraying_width']
             fit = data['fit']
@@ -818,7 +921,7 @@ class PlannerMainWindow(QMainWindow):
                 else:
                     complete_parcel_dict[parcel_id] = "white"  # Set missing parcels to "white"
 
-            self.color_codes_list = complete_parcel_dict
+            self.color_codes_list = [complete_parcel_dict[i] for i in range(total_parcels)]
 
             # Update UI elements
             self.top_left_lat_input.setText(str(location[0][0]))
@@ -970,15 +1073,56 @@ class PlannerMainWindow(QMainWindow):
 
 
 
+    def _build_color_codes_list(self, colored_parcels, total_parcels=None):
+        """
+        Build a stable, row-major list of parcel colors where index == parcel_id.
+
+        Accepts either:
+          - `{parcel_id: "#rrggbb"}`
+          - `{parcel_id: ("#rrggbb", x, y)}` (or JSON list variant)
+        """
+        if not colored_parcels:
+            return []
+
+        by_id = {}
+        for parcel_id, value in colored_parcels.items():
+            try:
+                parcel_index = int(parcel_id)
+            except (TypeError, ValueError):
+                continue
+
+            if isinstance(value, (list, tuple)) and value:
+                color = value[0]
+            else:
+                color = value
+
+            by_id[parcel_index] = color
+
+        if total_parcels is None:
+            total_parcels = (max(by_id.keys()) + 1) if by_id else 0
+
+        return [by_id.get(i, "white") for i in range(total_parcels)]
+
+    def _set_colored_parcels(self, colored_parcels):
+        self.colored_parcels = colored_parcels or {}
+        total_parcels = None
+        try:
+            total_parcels = int(self.count_x) * int(self.count_y)
+        except Exception:
+            total_parcels = None
+        self.color_codes_list = self._build_color_codes_list(self.colored_parcels, total_parcels=total_parcels)
+
     def initialize_with_parcels(self, colored_parcels):
         logger.debug(f"initializing with the parcels of:  {colored_parcels}")
-        self.colored_parcels = colored_parcels
-        self.color_codes_list = list(self.colored_parcels.values())
+        self._set_colored_parcels(colored_parcels)
 
-    def initialize_params(self, app_state, tr):
+    def initialize_params(self, app_state, tr=None):
         logger.debug(f"initializing with the params of: {app_state}")
         print(app_state.count_x)
-        self.translator = tr
+        if tr is not None:
+            self.translator = tr
+        elif not hasattr(self, "translator") or self.translator is None:
+            self.translator = QTranslator()
         self.width = app_state.width
         self.height = app_state.height
         self.gap_x = app_state.gap_x
@@ -986,7 +1130,7 @@ class PlannerMainWindow(QMainWindow):
         self.count_x = app_state.count_x
         self.count_y = app_state.count_y
         self.button_names = app_state.button_names
-        self.colored_parcels = app_state.colored_parcels
+        self._set_colored_parcels(app_state.colored_parcels)
         self.file_opened = app_state.file_opened
         self.paths_by_color = {}
         self.current_color = None
@@ -1181,10 +1325,10 @@ class PlannerMainWindow(QMainWindow):
         
         # Add spray width and corner coordinates
         report_lines.append(f"Spraying Width: {self.spraying_width_input.text()}\n")
-        report_lines.append(f"A Coordinates: ({round(float(self.top_left_lat_input.text()), 7)}, {round(float(self.top_left_lon_input.text()), 7)})\n")
-        report_lines.append(f"B Coordinates: ({round(float(self.top_right_lat_input.text()), 7)}, {round(float(self.top_left_lon_input.text()), 7)})\n")
-        report_lines.append(f"C Coordinates: ({round(float(self.bot_left_lat_input.text()), 7)}, {round(float(self.bot_left_lon_input.text()), 7)})\n")
-        report_lines.append(f"D Coordinates: ({round(float(self.bot_right_lat_input.text()), 7)}, {round(float(self.bot_right_lon_input.text()), 7)})\n")
+        report_lines.append(f"A Coordinates: ({round(self._parse_float(self.top_left_lat_input.text()), 7)}, {round(self._parse_float(self.top_left_lon_input.text()), 7)})\n")
+        report_lines.append(f"B Coordinates: ({round(self._parse_float(self.top_right_lat_input.text()), 7)}, {round(self._parse_float(self.top_left_lon_input.text()), 7)})\n")
+        report_lines.append(f"C Coordinates: ({round(self._parse_float(self.bot_left_lat_input.text()), 7)}, {round(self._parse_float(self.bot_left_lon_input.text()), 7)})\n")
+        report_lines.append(f"D Coordinates: ({round(self._parse_float(self.bot_right_lat_input.text()), 7)}, {round(self._parse_float(self.bot_right_lon_input.text()), 7)})\n")
         report_lines.append(f"Fit area: {app_state.fit}\n")
         report_lines.append(f"Parcel size preserved: {app_state.fit_gap}\n")
         report_lines.append("\n")
@@ -1451,14 +1595,14 @@ class PlannerMainWindow(QMainWindow):
         self.current_path = None
 
         try:
-            t_l_lat = float(self.top_left_lat_input.text())
-            t_l_lon = float(self.top_left_lon_input.text())
-            t_r_lat = float(self.top_right_lat_input.text())
-            t_r_lon = float(self.top_right_lon_input.text())
-            b_l_lat = float(self.bot_left_lat_input.text())
-            b_l_lon = float(self.bot_left_lon_input.text())
-            b_r_lat = float(self.bot_right_lat_input.text())
-            b_r_lon = float(self.bot_right_lon_input.text())
+            t_l_lat = self._parse_float(self.top_left_lat_input.text())
+            t_l_lon = self._parse_float(self.top_left_lon_input.text())
+            t_r_lat = self._parse_float(self.top_right_lat_input.text())
+            t_r_lon = self._parse_float(self.top_right_lon_input.text())
+            b_l_lat = self._parse_float(self.bot_left_lat_input.text())
+            b_l_lon = self._parse_float(self.bot_left_lon_input.text())
+            b_r_lat = self._parse_float(self.bot_right_lat_input.text())
+            b_r_lon = self._parse_float(self.bot_right_lon_input.text())
         except ValueError:
             self.show_warning(self.tr("Wrong Input"), self.tr("Please check inputs for coordinates"))
             return
@@ -1477,6 +1621,8 @@ class PlannerMainWindow(QMainWindow):
         # Checkboxes
         is_fit = self.fit.isChecked()
         app_state.fit = is_fit
+        preserve_parcel_size = self.fit_gap.isChecked()
+        app_state.fit_gap = preserve_parcel_size
         if is_fit:
             # Calculate the distance between the corners (top-left and top-right for width, top-left and bottom-left for height)
             top_left = (t_l_lat, t_l_lon)
@@ -1552,7 +1698,18 @@ class PlannerMainWindow(QMainWindow):
                 self.total_width.setText(self.tr("Total Width: {0:.2f} meters").format(total_width))
                 self.total_height.setText(self.tr("Total Height: {0:.2f} meters").format(total_height))
         try:
-            generator = ParcelGenerator(area_corners, self.width, self.height, self.gap_x, self.gap_y, self.count_x, self.count_y, is_fit, self.color_codes_list)
+            generator = ParcelGenerator(
+                area_corners,
+                self.width,
+                self.height,
+                self.gap_x,
+                self.gap_y,
+                self.count_x,
+                self.count_y,
+                is_fit=is_fit,
+                preserve_parcel_size=preserve_parcel_size,
+                colors=self.color_codes_list,
+            )
             self.parcel_coordinates = (generator.generate_parcel_coordinates())
         except:
             self.show_warning(self.tr("Saving Failed!"), self.tr("Please check the input fields and try again."))
@@ -1705,7 +1862,7 @@ class PlannerMainWindow(QMainWindow):
         
         # Get the spraying width from the input
         try:
-            spraying_width = float(self.spraying_width_input.text())
+            spraying_width = self._parse_float(self.spraying_width_input.text())
         except ValueError:
             self.show_warning(self.tr("Invalid Input"), self.tr("Please enter a valid spraying width."))
             return False
@@ -2118,7 +2275,7 @@ class PlannerMainWindow(QMainWindow):
 
         # Get the altitude from the input
         try:
-            altitude = float(self.set_alt_input.text())
+            altitude = self._parse_float(self.set_alt_input.text())
             if altitude <= 0:
                 raise ValueError
         except ValueError:
@@ -2127,16 +2284,24 @@ class PlannerMainWindow(QMainWindow):
 
         # Get the home coordinates
         try:
-            home_lat = float(self.top_left_lat_input.text())
-            home_lon = float(self.top_left_lon_input.text())
+            home_lat = self._parse_float(self.top_left_lat_input.text())
+            home_lon = self._parse_float(self.top_left_lon_input.text())
         except ValueError:
             self.show_warning(self.tr("Invalid lat - lon", "Please enter a valid coordinate."))
             return
 
         mavlink_data = ["QGC WPL 110"]
         seq = 0
+
+        def append_set_servo(servo_number, pwm):
+            nonlocal seq
+            # MAV_CMD_DO_SET_SERVO (183): param1=servo number, param2=pwm
+            # Use MAV_FRAME_MISSION (2) with zero coordinates for reliability.
+            mavlink_data.append(f"{seq}\t0\t2\t183\t{servo_number}\t{pwm}\t0\t0\t0\t0\t0\t1")
+            seq += 1
+
         # Add home waypoint (this can be adjusted if you have a specific home location)
-        mavlink_data.append(f"{seq}\t1\t0\t16\t0\t0\t0\t0\t{home_lat}\t{home_lon}\t1.990000\t1")
+        mavlink_data.append(f"{seq}\t1\t0\t16\t3\t0\t0\t0\t{home_lat}\t{home_lon}\t1.990000\t1")
         seq += 1
         # Add takeoff command
         mavlink_data.append(f"{seq}\t0\t3\t22\t0\t0\t0\t0\t0\t0\t{altitude}\t1")
@@ -2172,19 +2337,25 @@ class PlannerMainWindow(QMainWindow):
             lat_end_parcel, lon_end_parcel = parcel_point['end']
 
             # Waypoint to approach start point (with acceleration buffer)
-            mavlink_data.append(f"{seq}\t0\t3\t16\t0\t0\t0\t0\t{lat_start_buffer}\t{lon_start_buffer}\t{altitude}\t1")
+            mavlink_data.append(f"{seq}\t0\t3\t16\t3\t0\t0\t0\t{lat_start_buffer}\t{lon_start_buffer}\t{altitude}\t1")
             seq += 1
 
-            # Waypoint at start of parcel (where spraying begins)
-            mavlink_data.append(f"{seq}\t0\t3\t183\t0\t1\t0\t0\t{lat_start_parcel}\t{lon_start_parcel}\t{altitude}\t1")
+            # Waypoint at start of parcel (arrive at exact spray start)
+            mavlink_data.append(f"{seq}\t0\t3\t16\t0\t0\t0\t0\t{lat_start_parcel}\t{lon_start_parcel}\t{altitude}\t1")
             seq += 1
 
-            # Waypoint at end of parcel (where spraying ends)
-            mavlink_data.append(f"{seq}\t0\t3\t183\t0\t0\t0\t0\t{lat_end_parcel}\t{lon_end_parcel}\t{altitude}\t1")
+            # Start spraying at the start of the spray area (servo open)
+            append_set_servo(14, 2000)
+
+            # Waypoint at end of parcel (arrive at exact spray end)
+            mavlink_data.append(f"{seq}\t0\t3\t16\t0\t0\t0\t0\t{lat_end_parcel}\t{lon_end_parcel}\t{altitude}\t1")
             seq += 1
+
+            # Stop spraying at the end of the spray area (servo closed)
+            append_set_servo(14, 1000)
 
             # Waypoint to move to the end point with acceleration buffer
-            mavlink_data.append(f"{seq}\t0\t3\t16\t0\t0\t0\t0\t{lat_end_buffer}\t{lon_end_buffer}\t{altitude}\t1")
+            mavlink_data.append(f"{seq}\t0\t3\t16\t3\t0\t0\t0\t{lat_end_buffer}\t{lon_end_buffer}\t{altitude}\t1")
             seq += 1
 
         # Add return-to-launch command (MAV_CMD_NAV_RETURN_TO_LAUNCH)
@@ -2320,14 +2491,14 @@ class PlannerMainWindow(QMainWindow):
         if os.path.exists(self.config_file):
             config.read(self.config_file)
         config['Location'] = {
-            'a-lat': str(float(self.top_left_lat_input.text())),
-            'a-lon': str(float(self.top_left_lon_input.text())),
-            'b-lat': str(float(self.top_right_lat_input.text())),
-            'b-lon': str(float(self.top_right_lon_input.text())),
-            'c-lat': str(float(self.bot_left_lat_input.text())),
-            'c-lon': str(float(self.bot_left_lon_input.text())),
-            'd-lat': str(float(self.bot_right_lat_input.text())),
-            'd-lon': str(float(self.bot_right_lon_input.text())),
+            'a-lat': str(self._parse_float(self.top_left_lat_input.text())),
+            'a-lon': str(self._parse_float(self.top_left_lon_input.text())),
+            'b-lat': str(self._parse_float(self.top_right_lat_input.text())),
+            'b-lon': str(self._parse_float(self.top_right_lon_input.text())),
+            'c-lat': str(self._parse_float(self.bot_left_lat_input.text())),
+            'c-lon': str(self._parse_float(self.bot_left_lon_input.text())),
+            'd-lat': str(self._parse_float(self.bot_right_lat_input.text())),
+            'd-lon': str(self._parse_float(self.bot_right_lon_input.text())),
             'zoom': str(18)
         }
         with open(self.config_file, 'w') as configfile:

@@ -2,10 +2,11 @@ import sys
 import folium
 import os
 import requests
-from PyQt6.QtCore import QUrl, QThread, QTimer
+from PyQt6.QtCore import QUrl, QThread, QTimer, QObject, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import QApplication, QVBoxLayout, QWidget
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineSettings
+from PyQt6.QtWebChannel import QWebChannel
 import socket
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 from functools import partial
@@ -147,6 +148,9 @@ class TileServerThread(QThread):
         self.online = online
 
 class MapWidget(QWidget):
+    mapReady = pyqtSignal()
+    cornerMoved = pyqtSignal(str, float, float)
+
     def __init__(self):
         super().__init__()
 
@@ -156,6 +160,13 @@ class MapWidget(QWidget):
         # Initialize the WebEngineView
         self.view = QWebEngineView(self)
         self.layout.addWidget(self.view)
+
+        # WebChannel bridge (used for draggable corner markers)
+        self._bridge = _MapBridge()
+        self._bridge.cornerMoved.connect(self.cornerMoved)
+        self._web_channel = QWebChannel(self.view.page())
+        self._web_channel.registerObject("bridge", self._bridge)
+        self.view.page().setWebChannel(self._web_channel)
 
         # Directory to store cached tiles
         self.cache_dir = per_resource_path('map_tiles')
@@ -271,6 +282,10 @@ class MapWidget(QWidget):
         folium_map.get_root().html.add_child(folium.Element(f"""
             <script src="file:///{leaflet_js}"></script>
         """))
+        # Enable Qt WebChannel in the generated map so JS can call back into Python.
+        folium_map.get_root().header.add_child(folium.Element("""
+            <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+        """))
 
 
         # Save map data to an HTML file
@@ -290,7 +305,7 @@ class MapWidget(QWidget):
         self.view.loadFinished.connect(self.on_load_finished)
 
     def on_load_finished(self):
-        # JavaScript code to ensure mapObject is globally accessible
+        # JavaScript code to ensure mapObject is globally accessible + set up bridge + corner markers
         js_code = """
         if (typeof window.mapObject === 'undefined') {
             for (let key in window) {
@@ -300,6 +315,78 @@ class MapWidget(QWidget):
                 }
             }
         }
+
+        // Initialize WebChannel bridge (if available)
+        if (typeof window.bridge === 'undefined' && typeof QWebChannel !== 'undefined' && typeof qt !== 'undefined') {
+            new QWebChannel(qt.webChannelTransport, function(channel) {
+                window.bridge = channel.objects.bridge;
+            });
+        }
+
+        // Draggable corner markers (A, B, C, D)
+        if (typeof window.cornerMarkers === 'undefined') {
+            window.cornerMarkers = {};
+        }
+
+        window.setCornerMarkers = function(corners) {
+            if (!window.mapObject || !corners) return;
+
+            const keys = Object.keys(corners);
+            for (let idx = 0; idx < keys.length; idx++) {
+                const name = keys[idx];
+                const lat = corners[name][0];
+                const lng = corners[name][1];
+
+                if (!window.cornerMarkers[name]) {
+                    const marker = L.marker([lat, lng], { draggable: true }).addTo(window.mapObject);
+                    marker.bindTooltip(name, { permanent: true, direction: 'top', opacity: 0.9 });
+                    marker.on('dragend', function(e) {
+                        const pos = e.target.getLatLng();
+                        if (window.bridge && window.bridge.updateCorner) {
+                            window.bridge.updateCorner(name, pos.lat, pos.lng);
+                        }
+                    });
+                    window.cornerMarkers[name] = marker;
+                } else {
+                    window.cornerMarkers[name].setLatLng([lat, lng]);
+                }
+            }
+
+            // Fit bounds if we have at least 2 markers
+            if (keys.length >= 2) {
+                const latlngs = keys.map(k => window.cornerMarkers[k].getLatLng());
+                const bounds = L.latLngBounds(latlngs);
+                window.mapObject.fitBounds(bounds, { padding: [20, 20] });
+            }
+        };
+
+        if (window._pendingCornerMarkers) {
+            window.setCornerMarkers(window._pendingCornerMarkers);
+            window._pendingCornerMarkers = null;
+        }
+        """
+        self.view.page().runJavaScript(js_code)
+        self.mapReady.emit()
+
+    def set_corner_markers(self, corners):
+        """
+        corners: dict like {"A": (lat, lon), "B": (lat, lon), ...}
+        """
+        if not corners:
+            return
+        # Convert tuples to JS-friendly arrays
+        corners_js = {k: [v[0], v[1]] for k, v in corners.items()}
+        import json
+        corners_json = json.dumps(corners_js)
+        js_code = f"""
+        (function() {{
+            var corners = {corners_json};
+            if (typeof window.setCornerMarkers === 'function') {{
+                window.setCornerMarkers(corners);
+            }} else {{
+                window._pendingCornerMarkers = corners;
+            }}
+        }})();
         """
         self.view.page().runJavaScript(js_code)
 
@@ -392,6 +479,14 @@ class MapWidget(QWidget):
         }
         with open(self.config_file, 'w') as configfile:
             config.write(configfile)
+
+
+class _MapBridge(QObject):
+    cornerMoved = pyqtSignal(str, float, float)
+
+    @pyqtSlot(str, float, float)
+    def updateCorner(self, name, lat, lon):
+        self.cornerMoved.emit(name, lat, lon)
 
 
 class MainWindow(QWidget):
