@@ -5,14 +5,15 @@ import requests
 from PyQt6.QtCore import QUrl, QThread, QTimer, QObject, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import QApplication, QVBoxLayout, QWidget
 from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtWebEngineCore import QWebEngineSettings
+from PyQt6.QtWebEngineCore import QWebEngineSettings, QWebEngineProfile
 from PyQt6.QtWebChannel import QWebChannel
 import socket
-from http.server import SimpleHTTPRequestHandler, HTTPServer
+from http.server import SimpleHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from functools import partial
 import shutil
 import tempfile
 import configparser
+import email.utils
 
 def is_online():
     try:
@@ -45,9 +46,10 @@ def per_resource_path(relative_path):
 
 
 class TileServerHandler(SimpleHTTPRequestHandler):
-    def __init__(self, cache_dir, online, *args, **kwargs):
+    session = requests.Session()
+
+    def __init__(self, cache_dir, *args, **kwargs):
         self.cache_dir = cache_dir
-        self.online = online
         self.no_tile_image = resource_path("no_tile_found.png")
         super().__init__(*args, **kwargs)
 
@@ -60,17 +62,29 @@ class TileServerHandler(SimpleHTTPRequestHandler):
                 tile_path = os.path.join(self.cache_dir, f'{z}_{x}_{y}.png')
 
                 if os.path.exists(tile_path):
+                    etag = f"\"{os.path.getmtime(tile_path)}-{os.path.getsize(tile_path)}\""
+                    if self.headers.get("If-None-Match") == etag:
+                        self.send_response(304)
+                        self.send_header("ETag", etag)
+                        self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+                        self.end_headers()
+                        return
+
                     self.send_response(200)
                     self.send_header('Content-Type', 'image/png')
+                    self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+                    self.send_header("ETag", etag)
+                    self.send_header("Last-Modified", email.utils.formatdate(os.path.getmtime(tile_path), usegmt=True))
                     self.end_headers()
                     with open(tile_path, 'rb') as f:
                         self.wfile.write(f.read())
                 else:
-                    if is_online():
+                    online = getattr(self.server, "online", False)
+                    if online:
                         # Only try to download tiles if online
                         tile_url = f'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
                         try:
-                            response = requests.get(tile_url, stream=True)
+                            response = TileServerHandler.session.get(tile_url, stream=True, timeout=(3, 20))
                             if response.status_code == 200:
                                 os.makedirs(os.path.dirname(tile_path), exist_ok=True)
                                 with open(tile_path, 'wb') as tile_file:
@@ -78,6 +92,9 @@ class TileServerHandler(SimpleHTTPRequestHandler):
                                         tile_file.write(chunk)
                                 self.send_response(200)
                                 self.send_header('Content-Type', 'image/png')
+                                self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+                                etag = f"\"{os.path.getmtime(tile_path)}-{os.path.getsize(tile_path)}\""
+                                self.send_header("ETag", etag)
                                 self.end_headers()
                                 with open(tile_path, 'rb') as f:
                                     self.wfile.write(f.read())
@@ -132,20 +149,26 @@ class TileServerThread(QThread):
         self.online = online
         self.no_tile_image = resource_path("no_tile_found.png")
         self.port = port
+        self.httpd = None
 
     def run(self):
-        handler = partial(TileServerHandler, self.cache_dir, self.online)
-        self.httpd = HTTPServer(('localhost', self.port), handler)
+        handler = partial(TileServerHandler, self.cache_dir)
+        # Threaded server improves tile loading speed significantly (many tiles requested in parallel)
+        self.httpd = ThreadingHTTPServer(('localhost', self.port), handler)
+        self.httpd.online = self.online
         print(f"Starting tile server on port {self.port}")
         self.httpd.serve_forever()
 
     def stop(self):
-        self.httpd.shutdown()
+        if self.httpd is not None:
+            self.httpd.shutdown()
         print("Tile server stopped")
 
     def set_online_status(self, online):
         """Update the online status for the tile server."""
         self.online = online
+        if self.httpd is not None:
+            self.httpd.online = online
 
 class MapWidget(QWidget):
     mapReady = pyqtSignal()
@@ -161,6 +184,18 @@ class MapWidget(QWidget):
         self.view = QWebEngineView(self)
         self.layout.addWidget(self.view)
 
+        # Enable persistent on-disk WebEngine cache (speeds up tile reloading significantly)
+        try:
+            profile = self.view.page().profile()
+            web_cache_root = os.path.join(tempfile.gettempdir(), "ParcelPlanner", "qtwebengine")
+            os.makedirs(web_cache_root, exist_ok=True)
+            profile.setHttpCacheType(QWebEngineProfile.HttpCacheType.DiskHttpCache)
+            profile.setCachePath(os.path.join(web_cache_root, "cache"))
+            profile.setPersistentStoragePath(os.path.join(web_cache_root, "storage"))
+            profile.setHttpCacheMaximumSize(256 * 1024 * 1024)  # 256MB
+        except Exception as e:
+            print(f"Failed to enable WebEngine cache: {e}")
+
         # WebChannel bridge (used for draggable corner markers)
         self._bridge = _MapBridge()
         self._bridge.cornerMoved.connect(self.cornerMoved)
@@ -169,9 +204,14 @@ class MapWidget(QWidget):
         self.view.page().setWebChannel(self._web_channel)
 
         # Directory to store cached tiles
-        self.cache_dir = per_resource_path('map_tiles')
-        if not os.path.exists(self.cache_dir):
-            os.makedirs(self.cache_dir)
+        # Directory to store cached tiles (must be writable even in packaged builds)
+        preferred_cache_dir = per_resource_path('map_tiles')
+        try:
+            os.makedirs(preferred_cache_dir, exist_ok=True)
+            self.cache_dir = preferred_cache_dir
+        except Exception:
+            self.cache_dir = os.path.join(tempfile.gettempdir(), "ParcelPlanner", "map_tiles")
+            os.makedirs(self.cache_dir, exist_ok=True)
 
         self.no_tile_image = resource_path("no_tile_found.png")
 
@@ -248,6 +288,16 @@ class MapWidget(QWidget):
         event.accept()  # Accept the event to proceed with closing the window
 
     def load_map(self):
+        # Reuse the generated HTML when possible (avoids slow folium regeneration on every run)
+        temp_dir = tempfile.gettempdir()
+        map_path = os.path.join(temp_dir, 'parcel_planner_map.html')
+        if os.path.exists(map_path):
+            self.view.settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
+            self.view.settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+            self.view.setUrl(QUrl.fromLocalFile(map_path))
+            self.view.loadFinished.connect(self.on_load_finished)
+            return
+
         # Create a folium map with the OpenStreetMap tiles (low-res)
         folium_map = folium.Map(
             location=self.map_coords,
@@ -288,11 +338,7 @@ class MapWidget(QWidget):
         """))
 
 
-        # Save map data to an HTML file
-        map_path = resource_path('map.html')
-        # Get the system temp directory and save the map there
-        temp_dir = tempfile.gettempdir()
-        map_path = os.path.join(temp_dir, 'map.html')
+        # Save map data to an HTML file (temp, writable)
         folium_map.save(map_path)
 
 
@@ -360,13 +406,58 @@ class MapWidget(QWidget):
             }
         };
 
+        // One-shot click-to-set corner marker (used by Planner right panel)
+        window.enableCornerPick = function(cornerName) {
+            if (!window.mapObject || !cornerName) return;
+
+            // Remove any previous pending handler by overwriting the target.
+            window._cornerPickTarget = cornerName;
+
+            window.mapObject.once('click', function(e) {
+                const name = window._cornerPickTarget;
+                const lat = e.latlng.lat;
+                const lng = e.latlng.lng;
+
+                // Ensure marker exists and move it
+                if (!window.cornerMarkers) window.cornerMarkers = {};
+                if (!window.cornerMarkers[name]) {
+                    const marker = L.marker([lat, lng], { draggable: true }).addTo(window.mapObject);
+                    marker.bindTooltip(name, { permanent: true, direction: 'top', opacity: 0.9 });
+                    marker.on('dragend', function(ev) {
+                        const pos = ev.target.getLatLng();
+                        if (window.bridge && window.bridge.updateCorner) {
+                            window.bridge.updateCorner(name, pos.lat, pos.lng);
+                        }
+                    });
+                    window.cornerMarkers[name] = marker;
+                } else {
+                    window.cornerMarkers[name].setLatLng([lat, lng]);
+                }
+
+                if (window.bridge && window.bridge.updateCorner) {
+                    window.bridge.updateCorner(name, lat, lng);
+                }
+            });
+        };
+
         if (window._pendingCornerMarkers) {
             window.setCornerMarkers(window._pendingCornerMarkers);
             window._pendingCornerMarkers = null;
         }
+
+        if (window._pendingCornerPick) {
+            window.enableCornerPick(window._pendingCornerPick);
+            window._pendingCornerPick = null;
+        }
         """
-        self.view.page().runJavaScript(js_code)
-        self.mapReady.emit()
+        def _after_init(_result=None):
+            try:
+                self.update_map_center(self.map_coords[0], self.map_coords[1], self.map_zoom)
+            except Exception:
+                pass
+            self.mapReady.emit()
+
+        self.view.page().runJavaScript(js_code, _after_init)
 
     def set_corner_markers(self, corners):
         """
@@ -385,6 +476,26 @@ class MapWidget(QWidget):
                 window.setCornerMarkers(corners);
             }} else {{
                 window._pendingCornerMarkers = corners;
+            }}
+        }})();
+        """
+        self.view.page().runJavaScript(js_code)
+
+    def enable_corner_pick(self, corner_name):
+        """
+        Arms the map so the next click places the given corner marker and reports back via the bridge.
+        """
+        if not corner_name:
+            return
+        import json
+        corner_json = json.dumps(str(corner_name))
+        js_code = f"""
+        (function() {{
+            var name = {corner_json};
+            if (typeof window.enableCornerPick === 'function') {{
+                window.enableCornerPick(name);
+            }} else {{
+                window._pendingCornerPick = name;
             }}
         }})();
         """
