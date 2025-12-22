@@ -1,7 +1,7 @@
 import sys
-from PyQt6.QtWidgets import QApplication, QMainWindow, QHBoxLayout, QWidget, QSplitter, QLabel, QLineEdit, QFormLayout, QPushButton, QGridLayout, QSizePolicy, QRadioButton, QCheckBox, QMessageBox, QToolBar, QFileDialog, QScrollArea
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QIcon, QAction
+from PyQt6.QtWidgets import QApplication, QMainWindow, QHBoxLayout, QWidget, QSplitter, QLabel, QLineEdit, QFormLayout, QPushButton, QGridLayout, QSizePolicy, QRadioButton, QCheckBox, QMessageBox, QToolBar, QFileDialog, QScrollArea, QComboBox, QToolButton
+from PyQt6.QtCore import Qt, QEvent
+from PyQt6.QtGui import QColor, QIcon, QAction, QIntValidator
 import math
 from parcel_main import app_state
 from parcel_gen import ParcelGenerator
@@ -106,6 +106,7 @@ class PlannerMainWindow(QMainWindow):
         self.current_path = None
         self.current_start_marker = None
         self.current_end_marker = None
+        self._corner_labels = {}
 
         #self.clear_button = QPushButton(self.tr("Clear Parcels"))
         #self.clear_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -117,12 +118,15 @@ class PlannerMainWindow(QMainWindow):
         form_layout.addRow(self.back_button)
 
         self.top_left = QLabel(self.tr("Coordinate A"))
+        self._style_corner_label(self.top_left, "A")
+        self._corner_labels["A"] = self.top_left
         self.top_left_lat = QLabel("lat:")
         self.top_left_lat_input = QLineEdit("37.32500")
         self.top_left_lon = QLabel("lon:")
         self.top_left_lon_input = QLineEdit("-6.02884")
         self.top_left_lat_input.editingFinished.connect(self._sync_corners_to_map)
         self.top_left_lon_input.editingFinished.connect(self._sync_corners_to_map)
+        self.top_left.installEventFilter(self)
         self.top_left.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         hbox = QHBoxLayout()
         hbox.addWidget(self.top_left)
@@ -133,12 +137,15 @@ class PlannerMainWindow(QMainWindow):
         form_layout.addRow(hbox)
 
         self.top_right = QLabel(self.tr("Coordinate B"))
+        self._style_corner_label(self.top_right, "B")
+        self._corner_labels["B"] = self.top_right
         self.top_right_lat = QLabel("lat:")
         self.top_right_lat_input = QLineEdit("37.32490")
         self.top_right_lon = QLabel("lon:")
         self.top_right_lon_input = QLineEdit("-6.02861")
         self.top_right_lat_input.editingFinished.connect(self._sync_corners_to_map)
         self.top_right_lon_input.editingFinished.connect(self._sync_corners_to_map)
+        self.top_right.installEventFilter(self)
         self.top_right.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         hbox = QHBoxLayout()
         hbox.addWidget(self.top_right)
@@ -149,12 +156,15 @@ class PlannerMainWindow(QMainWindow):
         form_layout.addRow(hbox)
 
         self.bot_left = QLabel(self.tr("Coordinate C"))
+        self._style_corner_label(self.bot_left, "C")
+        self._corner_labels["C"] = self.bot_left
         self.bot_left_lat = QLabel("lat:")
         self.bot_left_lat_input = QLineEdit("37.32466")
         self.bot_left_lon = QLabel("lon:")
         self.bot_left_lon_input = QLineEdit("-6.02899")
         self.bot_left_lat_input.editingFinished.connect(self._sync_corners_to_map)
         self.bot_left_lon_input.editingFinished.connect(self._sync_corners_to_map)
+        self.bot_left.installEventFilter(self)
         self.bot_left.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         hbox = QHBoxLayout()
         hbox.addWidget(self.bot_left)
@@ -166,12 +176,15 @@ class PlannerMainWindow(QMainWindow):
 
 
         self.bot_right = QLabel(self.tr("Coordinate D"))
+        self._style_corner_label(self.bot_right, "D")
+        self._corner_labels["D"] = self.bot_right
         self.bot_right_lat = QLabel("lat:")
         self.bot_right_lat_input = QLineEdit("37.32427")
         self.bot_right_lon = QLabel("lon:")
         self.bot_right_lon_input = QLineEdit("-6.02829")
         self.bot_right_lat_input.editingFinished.connect(self._sync_corners_to_map)
         self.bot_right_lon_input.editingFinished.connect(self._sync_corners_to_map)
+        self.bot_right.installEventFilter(self)
         self.bot_right.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         hbox = QHBoxLayout()
         hbox.addWidget(self.bot_right)
@@ -217,6 +230,7 @@ class PlannerMainWindow(QMainWindow):
 
         # Ensure default corner markers show up once the map is loaded
         QTimer.singleShot(0, self._sync_corners_to_map)
+        self._corner_pick_target = None
         self.generate_mission.setVisible(False)
 
 
@@ -307,6 +321,36 @@ class PlannerMainWindow(QMainWindow):
         self.calculated_speed_label = QLabel(self.tr("Calculated Ground Speed: 0 km/h - 0 m/s"))
         form_layout.addRow(self.calculated_speed_label)
 
+        self.advanced_toggle = QToolButton()
+        self.advanced_toggle.setText(self.tr("Advanced"))
+        self.advanced_toggle.setCheckable(True)
+        self.advanced_toggle.setChecked(False)
+        self.advanced_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.advanced_toggle.setArrowType(Qt.ArrowType.RightArrow)
+        self.advanced_toggle.toggled.connect(self._toggle_advanced_section)
+
+        self.advanced_container = QWidget()
+        advanced_layout = QFormLayout(self.advanced_container)
+        advanced_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.servo_channel_combo = QComboBox()
+        self.servo_channel_combo.addItems([str(i) for i in range(10, 15)])
+        self.servo_channel_combo.setCurrentText("14")
+
+        self.pwm_high_input = QLineEdit("2000")
+        self.pwm_high_input.setValidator(QIntValidator(0, 3000, self))
+
+        self.pwm_low_input = QLineEdit("1000")
+        self.pwm_low_input.setValidator(QIntValidator(0, 3000, self))
+
+        advanced_layout.addRow(self.tr("Channel Number"), self.servo_channel_combo)
+        advanced_layout.addRow(self.tr("Spray On"), self.pwm_high_input)
+        advanced_layout.addRow(self.tr("Spray Off"), self.pwm_low_input)
+
+        self.advanced_container.setVisible(False)
+        form_layout.addRow(self.advanced_toggle)
+        form_layout.addRow(self.advanced_container)
+
         form_layout.addRow(self.generate_mission)
         form_layout.addRow(self.generate_report)
 
@@ -363,6 +407,70 @@ class PlannerMainWindow(QMainWindow):
         based on the state of the 'Fit parcels to the area?' checkbox.
         """
         self.fit_gap.setVisible(state)
+
+    def _style_corner_label(self, label, corner_name):
+        label.setCursor(Qt.CursorShape.PointingHandCursor)
+        label.setToolTip(self.tr("Click to pick {0} on the map").format(corner_name))
+        label.setProperty("cornerActive", False)
+        label.setStyleSheet("""
+            QLabel {
+                padding: 6px 10px;
+                border: 1px solid #bdbdbd;
+                border-radius: 8px;
+                background-color: #f7f7f7;
+                font-weight: 600;
+            }
+            QLabel:hover {
+                background-color: #e9f2ff;
+                border-color: #4a90e2;
+            }
+            QLabel[cornerActive="true"] {
+                background-color: #d9ecff;
+                border-color: #1e73d8;
+            }
+        """)
+
+    def _set_corner_pick_target(self, corner):
+        self._corner_pick_target = corner
+        for name, label in getattr(self, "_corner_labels", {}).items():
+            label.setProperty("cornerActive", name == corner)
+            label.style().unpolish(label)
+            label.style().polish(label)
+            label.update()
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.MouseButtonPress and obj in (self.top_left, self.top_right, self.bot_left, self.bot_right):
+            corner = "A" if obj is self.top_left else "B" if obj is self.top_right else "C" if obj is self.bot_left else "D"
+            self._set_corner_pick_target(corner)
+            try:
+                self.map_widget.enable_corner_pick(corner)
+            except Exception:
+                pass
+            return True
+        return super().eventFilter(obj, event)
+
+    def _toggle_advanced_section(self, expanded):
+        self.advanced_container.setVisible(expanded)
+        self.advanced_toggle.setArrowType(Qt.ArrowType.DownArrow if expanded else Qt.ArrowType.RightArrow)
+
+    def _get_servo_settings(self):
+        """
+        Returns (channel_number, pwm_high, pwm_low) with safe fallbacks.
+        """
+        try:
+            channel_number = int(self.servo_channel_combo.currentText())
+        except Exception:
+            channel_number = 14
+
+        def _to_int(text, default):
+            try:
+                return int(str(text).strip().replace(",", "."))
+            except Exception:
+                return default
+
+        pwm_high = _to_int(self.pwm_high_input.text(), 2000)
+        pwm_low = _to_int(self.pwm_low_input.text(), 1000)
+        return channel_number, pwm_high, pwm_low
 
     def _parse_float(self, text):
         """
@@ -447,6 +555,9 @@ class PlannerMainWindow(QMainWindow):
         elif corner_name == "D":
             self.bot_right_lat_input.setText(f"{lat:.7f}")
             self.bot_right_lon_input.setText(f"{lon:.7f}")
+
+        if getattr(self, "_corner_pick_target", None) == corner_name:
+            self._set_corner_pick_target(None)
 
     def change_acc(self):
         self.paths_by_color.clear()
@@ -888,8 +999,8 @@ class PlannerMainWindow(QMainWindow):
             self.button_names = {int(k): v for k, v in data['button_names'].items()}
             self.exact_width = data['width']
             self.exact_height = data['height']
-            self.width = round(self.exact_width)
-            self.height = round(self.exact_height)
+            self.width = float(self.exact_width)
+            self.height = float(self.exact_height)
             self.gap_x = data['gap_x']
             self.gap_y = data['gap_y']
             self.count_x = data['count_x']
@@ -1657,8 +1768,10 @@ class PlannerMainWindow(QMainWindow):
             self.height = round(self.exact_height)
 
             # Update the labels with the fitted dimensions using self.tr
-            self.width_label.setText(self.tr("Parcel Width: {0:.2f} meters (≈ {1})").format(self.exact_width, self.width))
-            self.height_label.setText(self.tr("Parcel Height: {0:.2f} meters (≈ {1})").format(self.exact_height, self.height))
+            approx_width = round(self.exact_width)
+            approx_height = round(self.exact_height)
+            self.width_label.setText(self.tr("Parcel Width: {0:.2f} meters (≈ {1})").format(self.exact_width, approx_width))
+            self.height_label.setText(self.tr("Parcel Height: {0:.2f} meters (≈ {1})").format(self.exact_height, approx_height))
             self.gap_x_layout.setText(self.tr("Gap X: {0:.2f} meters").format(self.gap_x))
             self.gap_y_layout.setText(self.tr("Gap Y: {0:.2f} meters").format(self.gap_y))
             self.total_width.setText(self.tr("Total Width: {0:.2f} meters").format(total_width))
@@ -1885,8 +1998,10 @@ class PlannerMainWindow(QMainWindow):
             self.update_total_length_label(total_distance)
             return True  # Exit the method since the path is already generated
 
-        # Check if the parcel height can be fully divided by the spraying width
-        if self.width % spraying_width != 0:
+        # Check if the parcel height can be fully divided by the spraying width (float-safe)
+        ratio = self.width / spraying_width
+        nearest = round(ratio)
+        if nearest <= 0 or abs(ratio - nearest) > 1e-6:
             self.show_warning(self.tr("Spraying Width Error"), self.tr("The parcel height cannot be evenly divided by the spraying width."))
             return
 
@@ -1895,7 +2010,7 @@ class PlannerMainWindow(QMainWindow):
             self.paths_by_color[self.current_color] = []
             self.parcel_points_by_color[self.current_color] = []
 
-        num_passes = int(self.width / spraying_width)
+        num_passes = max(1, int(round(ratio)))
         color_parcels = []
         parcel_points = []
         path = []
@@ -2293,6 +2408,8 @@ class PlannerMainWindow(QMainWindow):
         mavlink_data = ["QGC WPL 110"]
         seq = 0
 
+        channel_number, pwm_high, pwm_low = self._get_servo_settings()
+
         def append_set_servo(servo_number, pwm):
             nonlocal seq
             # MAV_CMD_DO_SET_SERVO (183): param1=servo number, param2=pwm
@@ -2345,14 +2462,14 @@ class PlannerMainWindow(QMainWindow):
             seq += 1
 
             # Start spraying at the start of the spray area (servo open)
-            append_set_servo(14, 2000)
+            append_set_servo(channel_number, pwm_high)
 
             # Waypoint at end of parcel (arrive at exact spray end)
             mavlink_data.append(f"{seq}\t0\t3\t16\t0\t0\t0\t0\t{lat_end_parcel}\t{lon_end_parcel}\t{altitude}\t1")
             seq += 1
 
             # Stop spraying at the end of the spray area (servo closed)
-            append_set_servo(14, 1000)
+            append_set_servo(channel_number, pwm_low)
 
             # Waypoint to move to the end point with acceleration buffer
             mavlink_data.append(f"{seq}\t0\t3\t16\t3\t0\t0\t0\t{lat_end_buffer}\t{lon_end_buffer}\t{altitude}\t1")
