@@ -2458,14 +2458,14 @@ class PlannerMainWindow(QMainWindow):
             seq += 1
 
             # Waypoint at start of parcel (arrive at exact spray start)
-            mavlink_data.append(f"{seq}\t0\t3\t16\t0\t0\t0\t0\t{lat_start_parcel}\t{lon_start_parcel}\t{altitude}\t1")
+            mavlink_data.append(f"{seq}\t0\t3\t82\t0\t0\t0\t0\t{lat_start_parcel}\t{lon_start_parcel}\t{altitude}\t1")
             seq += 1
 
             # Start spraying at the start of the spray area (servo open)
             append_set_servo(channel_number, pwm_high)
 
             # Waypoint at end of parcel (arrive at exact spray end)
-            mavlink_data.append(f"{seq}\t0\t3\t16\t0\t0\t0\t0\t{lat_end_parcel}\t{lon_end_parcel}\t{altitude}\t1")
+            mavlink_data.append(f"{seq}\t0\t3\t82\t0\t0\t0\t0\t{lat_end_parcel}\t{lon_end_parcel}\t{altitude}\t1")
             seq += 1
 
             # Stop spraying at the end of the spray area (servo closed)
